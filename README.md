@@ -31,6 +31,15 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - **Persistence:** browser `IndexedDB` — subscription list, read/unread state, and cached posts. No backend database or user accounts in the MVP. Used via the raw `IndexedDB` API first (educational), then wrapped in a small hand-rolled abstraction once the raw usage gets repetitive
 - **Feed formats supported:** RSS 2.0 and Atom, normalized into one common `Post` shape
 
+## Local Development
+
+```sh
+pnpm install
+pnpm dev      # start the dev server
+pnpm build    # build the static site to dist/
+pnpm preview  # preview the production build locally
+```
+
 ## Deployment
 
 Cloudflare Pages, auto-deploying from `main`.
