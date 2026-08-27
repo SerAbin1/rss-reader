@@ -19,8 +19,7 @@ export async function onRequestGet({
 	let target: URL;
 	try {
 		target = new URL(feedUrlParam);
-	} catch (err) {
-		console.error(err);
+	} catch {
 		return jsonError("Invalid feed URL.", 400);
 	}
 
@@ -31,13 +30,11 @@ export async function onRequestGet({
 	let feedResponse: Response;
 	try {
 		feedResponse = await fetch(target.toString());
-	} catch (err) {
-		console.error(err);
+	} catch {
 		return jsonError("Failed to fetch feed.", 502);
 	}
 
 	if (!feedResponse.ok) {
-		console.error(`Feed responded with ${feedResponse.status}`);
 		return jsonError(`Feed responded with ${feedResponse.status}.`, 502);
 	}
 
