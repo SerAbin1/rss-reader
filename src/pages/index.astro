@@ -13,6 +13,18 @@
 	</head>
 	<body>
 		<h1>RSS Reader</h1>
-		<p>Skeleton — nothing here yet.</p>
+
+		<section>
+			<label for="opml-input">Import OPML file</label>
+			<input type="file" id="opml-input" accept=".opml,.xml,text/xml,text/x-opml" />
+			<p id="status"></p>
+		</section>
+
+		<section>
+			<h2>Subscribed feeds</h2>
+			<ul id="feed-list"></ul>
+		</section>
+
+		<script src="../scripts/app.ts"></script>
 	</body>
 </html>
