@@ -14,15 +14,23 @@
 	<body>
 		<h1>RSS Reader</h1>
 
+		<!-- Main content: posts from all subscribed feeds. -->
 		<section>
-			<label for="opml-input">Import OPML file</label>
-			<input type="file" id="opml-input" accept=".opml,.xml,text/xml,text/x-opml" />
-			<p id="status"></p>
+			<p id="posts-status"></p>
+			<ul id="post-list"></ul>
 		</section>
 
+		<!--
+			Subscription management, deliberately unstyled/secondary for now.
+			Eventually this becomes a "+" icon opening an add-feed/import-OPML flow,
+			tucked away from the main posts view instead of sitting above it.
+		-->
 		<section>
 			<h2>Subscribed feeds</h2>
 			<ul id="feed-list"></ul>
+			<label for="opml-input">Import OPML file</label>
+			<input type="file" id="opml-input" accept=".opml,.xml,text/xml,text/x-opml" />
+			<p id="status"></p>
 		</section>
 
 		<script src="../scripts/app.ts"></script>

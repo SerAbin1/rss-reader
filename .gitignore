@@ -9,3 +9,7 @@ node_modules/
 # environment variables
 .env
 .env.production
+
+# wrangler local state (Miniflare cache/sqlite from `pnpm pages:dev`) and secrets
+.wrangler/
+.dev.vars

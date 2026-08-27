@@ -35,10 +35,14 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 
 ```sh
 pnpm install
-pnpm dev      # start the dev server
-pnpm build    # build the static site to dist/
-pnpm preview  # preview the production build locally
+pnpm dev        # start the Astro dev server (pages only — no /api/feed)
+pnpm build      # build the static site to dist/
+pnpm preview    # preview the production build locally (no /api/feed either)
+pnpm pages:dev  # build first, then: serves dist/ + functions/ together, incl. /api/feed
+pnpm test       # run the test suite
 ```
+
+`pnpm dev`/`pnpm preview` don't run Cloudflare Pages Functions — `/api/feed` only exists under `pnpm pages:dev` (Wrangler). Run `pnpm build` again after changing anything under `functions/` or `src/`, then re-run `pnpm pages:dev` to pick it up.
 
 ## Deployment
 
