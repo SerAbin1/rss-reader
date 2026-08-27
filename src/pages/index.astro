@@ -17,6 +17,15 @@
 		<!-- Main content: posts from all subscribed feeds. -->
 		<section>
 			<p id="posts-status"></p>
+			<!--
+				One-time escape hatch for a backlog you have no intention of reading
+				through in order (e.g. right after importing an OPML with years of
+				history). Sets the watermark to a date you pick — does not change
+				the normal click-to-advance behavior at all.
+			-->
+			<label for="catch-up-date">Mark everything read up to</label>
+			<input type="date" id="catch-up-date" />
+			<button id="catch-up-button" type="button">Catch up</button>
 			<ul id="post-list"></ul>
 		</section>
 

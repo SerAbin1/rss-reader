@@ -4,18 +4,19 @@ A small personal RSS/Atom reader
 
 ## Goal
 
-Import an OPML file of feed subscriptions, and on every visit to the site, pull the latest posts from those feeds and show them in one unified, chronological list.
+Import an OPML file of feed subscriptions, and on every visit to the site, pull the latest posts from those feeds and show them in one unified list, earliest unread first.
 
 ## Core Features
 
 - Manually add a single feed by URL or import an OPML file to populate the subscription list (stored locally in the browser)
 - On each visit, fetch the latest items from every subscribed feed
-- Show a unified, chronologically sorted list of posts across all feeds
-- Mark posts as read/unread (persisted locally)
+- Show a unified list of posts across all feeds, sorted earliest first
+- Read/unread tracking via a single "last read" watermark (see Architecture) rather than per-post state
 - Basic error handling for feeds that fail to load
 
 ## Goals
 
+- Favorites: a separate section that fully caches favorited articles' content, independent of read/unread state or the live feed
 - Export current subscriptions back to OPML
 - Group feeds into folders/categories
 - Search/filter posts
@@ -28,7 +29,9 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - **Hosting:** Cloudflare Pages
 - **Framework:** Astro + TypeScript
 - **CORS / feed fetching:** a Cloudflare Pages Function (`/api/feed`) fetches feed XML server-side and returns normalized JSON, avoiding the CORS restrictions that block fetching third-party feeds directly from the browser
-- **Persistence:** browser `IndexedDB` — subscription list, read/unread state, and cached posts. No backend database or user accounts in the MVP. Used via the raw `IndexedDB` API first (educational), then wrapped in a small hand-rolled abstraction once the raw usage gets repetitive
+- **Persistence:** browser `IndexedDB` — subscription list and a single `lastReadAt` watermark. No backend database or user accounts in the MVP. Used via the raw `IndexedDB` API first (educational), then wrapped in a small hand-rolled abstraction once the raw usage gets repetitive
+- **Read/unread:** no per-post state. One `lastReadAt` date; a post is read if `publishedAt <= lastReadAt`. Requires reading the (earliest-first) list in order — clicking a post only advances the watermark if it's the very next unread one; clicking further ahead reads just that one post without marking the skipped ones read. Read posts are filtered out of the rendered list entirely, not just styled differently — dynamically-created `<li>` elements can't be targeted by Astro's scoped `<style>` anyway (see Obsidian log). Pure decision logic lives in `src/lib/read-state.ts`, unit-tested separately from the DOM wiring in `src/scripts/app.ts`
+- **Catch-up escape hatch:** a date picker + button lets you jump `lastReadAt` straight to a chosen date (e.g. right after importing an OPML with years of backlog), without changing the normal click-to-advance behavior at all
 - **Feed formats supported:** RSS 2.0 and Atom, normalized into one common `Post` shape
 
 ## Local Development
