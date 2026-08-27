@@ -124,42 +124,56 @@ async function fetchPosts(feed: Feed): Promise<Post[]> {
 	return parseFeed(await res.text(), feed.feedUrl);
 }
 
+function updateLoadStatus(
+	totalFeeds: number,
+	settledFeeds: number,
+	failures: number,
+): void {
+	const unreadCount = currentPosts.filter(
+		(post) => !isRead(post.publishedAt, lastReadAt),
+	).length;
+	const loadedSummary = `${unreadCount} unread of ${currentPosts.length} loaded`;
+	const progress = settledFeeds < totalFeeds ? ` (${settledFeeds}/${totalFeeds} feeds)` : "";
+	const failureNote = failures > 0 ? ` ${failures} feed(s) failed to load — see console.` : "";
+	postsStatusEl.textContent = `${loadedSummary}.${progress}${failureNote}`;
+}
+
+// Renders each feed's posts as soon as that one feed resolves, merged into the
+// running sorted list, rather than waiting for every feed (there can be dozens)
+// to finish before showing anything.
 async function loadPosts(feeds: Feed[]): Promise<void> {
+	currentPosts = [];
+	currentFeedTitleByUrl = new Map(feeds.map((feed) => [feed.feedUrl, feed.title]));
+
 	if (feeds.length === 0) {
-		currentPosts = [];
 		postListEl.replaceChildren();
 		postsStatusEl.textContent = "No feeds subscribed yet.";
 		return;
 	}
 
-	postsStatusEl.textContent = "Loading posts…";
-
-	const results = await Promise.allSettled(feeds.map(fetchPosts));
-
-	const posts: Post[] = [];
-	let failures = 0;
-	for (const result of results) {
-		if (result.status === "fulfilled") {
-			posts.push(...result.value);
-		} else {
-			failures++;
-			console.error(result.reason);
-		}
-	}
-
-	posts.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
-
-	currentPosts = posts;
-	currentFeedTitleByUrl = new Map(feeds.map((feed) => [feed.feedUrl, feed.title]));
 	lastReadAt = await getLastReadAt();
 	renderPosts();
 
-	const unreadCount = posts.filter((post) => !isRead(post.publishedAt, lastReadAt)).length;
-	const loadedSummary = `${unreadCount} unread of ${posts.length} loaded`;
-	postsStatusEl.textContent =
-		failures > 0
-			? `${loadedSummary}. ${failures} feed(s) failed to load — see console.`
-			: `${loadedSummary}.`;
+	let settledFeeds = 0;
+	let failures = 0;
+	updateLoadStatus(feeds.length, settledFeeds, failures);
+
+	await Promise.allSettled(
+		feeds.map(async (feed) => {
+			try {
+				const posts = await fetchPosts(feed);
+				currentPosts.push(...posts);
+				currentPosts.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+				renderPosts();
+			} catch (err) {
+				failures++;
+				console.error(err);
+			} finally {
+				settledFeeds++;
+				updateLoadStatus(feeds.length, settledFeeds, failures);
+			}
+		}),
+	);
 }
 
 async function refresh(): Promise<void> {

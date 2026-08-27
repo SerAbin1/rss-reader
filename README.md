@@ -10,7 +10,7 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 
 - Manually add a single feed by URL or import an OPML file to populate the subscription list (stored locally in the browser)
 - On each visit, fetch the latest items from every subscribed feed
-- Show a unified list of posts across all feeds, sorted earliest first
+- Show a unified list of posts across all feeds, sorted earliest first — rendered incrementally as each feed's fetch resolves, not held back until every feed responds
 - Read/unread tracking via a single "last read" watermark (see Architecture) rather than per-post state
 - Basic error handling for feeds that fail to load
 
