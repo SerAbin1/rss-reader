@@ -1,0 +1,64 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<opml version="2.0">
+  <head>
+    <title>Read You</title>
+    <dateCreated>Thu Aug 27 18:46:02 GMT+05:30 2026</dateCreated>
+  </head>
+  <body>
+    <outline text="Default" title="Default">    <outline htmlUrl="https://www.seangoedecke.com/rss.xml" text="seangoedecke.com RSS feed" title="seangoedecke.com RSS feed" xmlUrl="https://www.seangoedecke.com/rss.xml" />
+    <outline htmlUrl="https://borretti.me/feed.xml" text="Fernando Borretti" title="Fernando Borretti" xmlUrl="https://borretti.me/feed.xml" />
+    <outline htmlUrl="https://blog.codinghorror.com/rss/" text="Coding Horror" title="Coding Horror" xmlUrl="https://blog.codinghorror.com/rss/" />
+    <outline htmlUrl="https://lewboski.dev/rss.xml" text="Lewboski Dev Blog" title="Lewboski Dev Blog" xmlUrl="https://lewboski.dev/rss.xml" />
+    <outline htmlUrl="https://mathwithbaddrawings.com/feed/" text="Math with Bad Drawings" title="Math with Bad Drawings" xmlUrl="https://mathwithbaddrawings.com/feed/" />
+    <outline htmlUrl="https://www.0xsid.com/blog/rss.xml" text="Sid's Blog" title="Sid's Blog" xmlUrl="https://www.0xsid.com/blog/rss.xml" />
+    <outline htmlUrl="https://lemire.me/blog/feed/" text="Daniel Lemire's blog" title="Daniel Lemire's blog" xmlUrl="https://lemire.me/blog/feed/" />
+    <outline htmlUrl="https://growingswe.com/feed.xml" text="Growing SWE" title="Growing SWE" xmlUrl="https://growingswe.com/feed.xml" />
+    <outline htmlUrl="https://mitchellh.com/feed.xml" text="Mitchell Hashimoto" title="Mitchell Hashimoto" xmlUrl="https://mitchellh.com/feed.xml" />
+    <outline htmlUrl="https://thorstenball.com/atom.xml" text="Thorsten Ball " title="Thorsten Ball " xmlUrl="https://thorstenball.com/atom.xml" />
+    <outline htmlUrl="https://journal.stuffwithstuff.com/rss.xml" text="journal.stuffwithstuff.com" title="journal.stuffwithstuff.com" xmlUrl="https://journal.stuffwithstuff.com/rss.xml" />
+    <outline htmlUrl="https://www.gingerbill.org/article/index.xml" text="gingerBill - Articles" title="gingerBill - Articles" xmlUrl="https://www.gingerbill.org/article/index.xml" />
+    <outline htmlUrl="https://tonsky.me/atom.xml" text="tonsky.me" title="tonsky.me" xmlUrl="https://tonsky.me/atom.xml" />
+    <outline htmlUrl="https://www.theengineersnotebook.com/feed" text="The Engineer's Notebook" title="The Engineer's Notebook" xmlUrl="https://www.theengineersnotebook.com/feed" />
+    <outline htmlUrl="https://commandcenter.blogspot.com/feeds/posts/default" text="command center" title="command center" xmlUrl="https://commandcenter.blogspot.com/feeds/posts/default" />
+    <outline htmlUrl="https://research.swtch.com/feed.atom" text="research!rsc" title="research!rsc" xmlUrl="https://research.swtch.com/feed.atom" />
+    <outline htmlUrl="https://adueck.github.io/blog/rss" text="Adam Dueck Blog RSS Feed" title="Adam Dueck Blog RSS Feed" xmlUrl="https://adueck.github.io/blog/rss" />
+    <outline htmlUrl="https://archlinux.org/feeds/news/" text="Arch Linux: Recent news updates" title="Arch Linux: Recent news updates" xmlUrl="https://archlinux.org/feeds/news/" />
+    <outline htmlUrl="https://andrewkelley.me/rss.xml" text="Andrew Kelley" title="Andrew Kelley" xmlUrl="https://andrewkelley.me/rss.xml" />
+    <outline htmlUrl="https://serabin1.github.io/rss.xml" text="Abin Biju's Blog" title="Abin Biju's Blog" xmlUrl="https://serabin1.github.io/rss.xml" />
+    <outline htmlUrl="https://lalitm.com/articles/index.xml" text="Lalit Maganti (Articles only)" title="Lalit Maganti (Articles only)" xmlUrl="https://lalitm.com/articles/index.xml" />
+</outline>
+    <outline text="Dev" title="Dev">    <outline htmlUrl="https://dave.cheney.net/feed" text="Dave Cheney" title="Dave Cheney" xmlUrl="https://dave.cheney.net/feed" />
+    <outline htmlUrl="https://blog.acolyer.org/feed/" text="the morning paper" title="the morning paper" xmlUrl="https://blog.acolyer.org/feed/" />
+    <outline htmlUrl="https://www.somethingsimilar.com/feed" text="Something Similar" title="Something Similar" xmlUrl="https://www.somethingsimilar.com/feed" />
+    <outline htmlUrl="https://eli.thegreenplace.net/feeds/all.atom.xml" text="Eli Bendersky's website" title="Eli Bendersky's website" xmlUrl="https://eli.thegreenplace.net/feeds/all.atom.xml" />
+    <outline htmlUrl="https://jvns.ca/atom.xml" text="Julia Evans" title="Julia Evans" xmlUrl="https://jvns.ca/atom.xml" />
+    <outline htmlUrl="https://blog.algomaster.io/feed" text="AlgoMaster Newsletter" title="AlgoMaster Newsletter" xmlUrl="https://blog.algomaster.io/feed" />
+    <outline htmlUrl="https://www.ducktyped.org/feed" text="DuckTyped" title="DuckTyped" xmlUrl="https://www.ducktyped.org/feed" />
+    <outline htmlUrl="https://arpitbhayani.me/rss.xml" text="Arpit Bhayani" title="Arpit Bhayani" xmlUrl="https://arpitbhayani.me/rss.xml" />
+    <outline htmlUrl="https://rushter.com/blog/feed/" text="Artem Golubin" title="Artem Golubin" xmlUrl="https://rushter.com/blog/feed/" />
+    <outline htmlUrl="https://fabiensanglard.net/rss.xml" text="Fabien Sanglard" title="Fabien Sanglard" xmlUrl="https://fabiensanglard.net/rss.xml" />
+    <outline htmlUrl="https://alexharri.com/rss.xml" text="Blog | Alex Harri" title="Blog | Alex Harri" xmlUrl="https://alexharri.com/rss.xml" />
+    <outline htmlUrl="https://overreacted.io/rss.xml" text="overreacted — A blog by Dan Abramov" title="overreacted — A blog by Dan Abramov" xmlUrl="https://overreacted.io/rss.xml" />
+    <outline htmlUrl="https://rss.app/feeds/OLLUdv97mo37pGIF.xml" text="Engineering Blog" title="Engineering Blog" xmlUrl="https://rss.app/feeds/OLLUdv97mo37pGIF.xml" />
+    <outline htmlUrl="https://rss.beehiiv.com/feeds/wnEIOSd99q.xml" text="Sloth Bytes" title="Sloth Bytes" xmlUrl="https://rss.beehiiv.com/feeds/wnEIOSd99q.xml" />
+    <outline htmlUrl="https://www.joshwcomeau.com/rss.xml" text="Josh Comeau's blog" title="Josh Comeau's blog" xmlUrl="https://www.joshwcomeau.com/rss.xml" />
+    <outline htmlUrl="https://beej.us/blog/rss.xml" text="Beej's Bit Bucket" title="Beej's Bit Bucket" xmlUrl="https://beej.us/blog/rss.xml" />
+    <outline htmlUrl="https://www.tedinski.com/feed.xml" text="Ted Kaminski" title="Ted Kaminski" xmlUrl="https://www.tedinski.com/feed.xml" />
+    <outline htmlUrl="https://this-week-in-rust.org/rss.xml" text="This Week in Rust" title="This Week in Rust" xmlUrl="https://this-week-in-rust.org/rss.xml" />
+    <outline htmlUrl="https://burntsushi.net/index.xml" text="Andrew Gallant's Blog on Andrew Gallant's Blog " title="Andrew Gallant's Blog on Andrew Gallant's Blog " xmlUrl="https://burntsushi.net/index.xml" />
+    <outline htmlUrl="https://blog.sheerluck.dev/rss.xml" text="Mrsheerluck Blog" title="Mrsheerluck Blog" xmlUrl="https://blog.sheerluck.dev/rss.xml" />
+    <outline htmlUrl="https://karboosx.net/rss.xml" text="Karboosx" title="Karboosx" xmlUrl="https://karboosx.net/rss.xml" />
+    <outline htmlUrl="https://www.allthingsdistributed.com/atom.xml" text="All Things Distributed" title="All Things Distributed" xmlUrl="https://www.allthingsdistributed.com/atom.xml" />
+</outline>
+    <outline text="Social" title="Social">    <outline htmlUrl="https://indconlawphil.wordpress.com/feed/" text="Constitutional Law and Philosophy" title="Constitutional Law and Philosophy" xmlUrl="https://indconlawphil.wordpress.com/feed/" />
+    <outline htmlUrl="https://rss.app/feeds/f46lbds3N7IB5u0a.xml" text="Supreme Court Observer - A living archive of the Supreme Court of India." title="Supreme Court Observer - A living archive of the Supreme Court of India." xmlUrl="https://rss.app/feeds/f46lbds3N7IB5u0a.xml" />
+</outline>
+    <outline text="BackEnd" title="BackEnd">    <outline htmlUrl="https://sahilserver.substack.com/feed" text="Brain Bytes &amp; Binary" title="Brain Bytes &amp; Binary" xmlUrl="https://sahilserver.substack.com/feed" />
+</outline>
+    <outline text="ML" title="ML">    <outline htmlUrl="https://www.fast.ai/index.xml" text="fast.ai" title="fast.ai" xmlUrl="https://www.fast.ai/index.xml" />
+</outline>
+    <outline text="CyberSecurity" title="CyberSecurity">    <outline htmlUrl="https://heartburn.dev/rss/" text="Cyber Security Blog" title="Cyber Security Blog" xmlUrl="https://heartburn.dev/rss/" />
+</outline>
+    <outline text="Films" title="Films" />
+  </body>
+</opml>
