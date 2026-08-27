@@ -10,12 +10,208 @@
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		<title>RSS Reader</title>
+		<!--
+			is:global, not scoped: most of this app's DOM (#post-list/#feed-list
+			items) is created client-side by app.ts via document.createElement,
+			which Astro's scoped-style attribute stamping never reaches (see the
+			Obsidian decision log for the bug this was learned from).
+		-->
+		<style is:global>
+			:root {
+				--font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "URW Palladio L", Georgia, serif;
+				--font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+				--bg: #faf8f4;
+				--fg: #22201c;
+				--muted: #79715f;
+				--border: #e4ded0;
+				--control-bg: #f2eee4;
+			}
+
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: #18160f;
+					--fg: #eae5d9;
+					--muted: #948c78;
+					--border: #332e22;
+					--control-bg: #221f17;
+				}
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html {
+				background: var(--bg);
+			}
+
+			body {
+				background: var(--bg);
+				color: var(--fg);
+				font-family: var(--font-sans);
+				line-height: 1.5;
+				max-width: 40rem;
+				margin: 0 auto;
+				padding: 3rem 1.5rem 5rem;
+			}
+
+			a {
+				color: inherit;
+			}
+
+			a:visited {
+				color: inherit;
+			}
+
+			ul {
+				list-style: none;
+				margin: 0;
+				padding: 0;
+			}
+
+			.masthead {
+				margin-bottom: 2.5rem;
+			}
+
+			.masthead h1 {
+				font-family: var(--font-serif);
+				font-style: italic;
+				font-weight: 400;
+				font-size: 1.5rem;
+				letter-spacing: 0.02em;
+				margin: 0 0 0.6rem;
+			}
+
+			.masthead hr {
+				border: none;
+				border-top: 1px solid var(--border);
+				margin: 0;
+			}
+
+			#posts-status {
+				font-family: var(--font-sans);
+				font-size: 0.8rem;
+				color: var(--muted);
+				margin: 0 0 1.25rem;
+			}
+
+			.catch-up {
+				display: flex;
+				align-items: center;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				font-size: 0.8rem;
+				color: var(--muted);
+				margin-bottom: 2.25rem;
+			}
+
+			.catch-up label {
+				white-space: nowrap;
+			}
+
+			.catch-up input,
+			.catch-up button {
+				font: inherit;
+				color: var(--fg);
+				background: var(--control-bg);
+				border: 1px solid var(--border);
+				border-radius: 3px;
+				padding: 0.3rem 0.5rem;
+			}
+
+			.catch-up button {
+				cursor: pointer;
+			}
+
+			.catch-up button:hover {
+				border-color: var(--muted);
+			}
+
+			#post-list li {
+				padding: 1rem 0;
+				border-bottom: 1px solid var(--border);
+			}
+
+			#post-list li:first-child {
+				padding-top: 0;
+			}
+
+			#post-list a {
+				display: block;
+				font-family: var(--font-serif);
+				font-size: 1.05rem;
+				line-height: 1.4;
+				text-decoration: none;
+			}
+
+			#post-list a:hover {
+				text-decoration: underline;
+			}
+
+			#post-list .meta {
+				display: block;
+				margin-top: 0.3rem;
+				font-family: var(--font-sans);
+				font-size: 0.78rem;
+				color: var(--muted);
+			}
+
+			#post-list .feed-name::after {
+				content: " · ";
+			}
+
+			.subscriptions {
+				margin-top: 4rem;
+				padding-top: 1.5rem;
+				border-top: 1px solid var(--border);
+				font-size: 0.8rem;
+				color: var(--muted);
+			}
+
+			.subscriptions h2 {
+				font-family: var(--font-sans);
+				font-weight: 600;
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--muted);
+				margin: 0 0 0.75rem;
+			}
+
+			#feed-list {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.4rem 0.9rem;
+				margin-bottom: 1.25rem;
+			}
+
+			.import-opml {
+				display: flex;
+				align-items: center;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+			}
+
+			.import-opml input[type="file"] {
+				font: inherit;
+				font-size: 0.8rem;
+				color: var(--muted);
+			}
+
+			#status {
+				margin: 0.5rem 0 0;
+			}
+		</style>
 	</head>
 	<body>
-		<h1>RSS Reader</h1>
+		<header class="masthead">
+			<h1>RSS Reader</h1>
+			<hr />
+		</header>
 
 		<!-- Main content: posts from all subscribed feeds. -->
-		<section>
+		<main>
 			<p id="posts-status"></p>
 			<!--
 				One-time escape hatch for a backlog you have no intention of reading
@@ -23,22 +219,26 @@
 				history). Sets the watermark to a date you pick — does not change
 				the normal click-to-advance behavior at all.
 			-->
-			<label for="catch-up-date">Mark everything read up to</label>
-			<input type="date" id="catch-up-date" />
-			<button id="catch-up-button" type="button">Catch up</button>
+			<div class="catch-up">
+				<label for="catch-up-date">Mark everything read before</label>
+				<input type="date" id="catch-up-date" />
+				<button id="catch-up-button" type="button">Catch up</button>
+			</div>
 			<ul id="post-list"></ul>
-		</section>
+		</main>
 
 		<!--
 			Subscription management, deliberately unstyled/secondary for now.
 			Eventually this becomes a "+" icon opening an add-feed/import-OPML flow,
 			tucked away from the main posts view instead of sitting above it.
 		-->
-		<section>
+		<section class="subscriptions">
 			<h2>Subscribed feeds</h2>
 			<ul id="feed-list"></ul>
-			<label for="opml-input">Import OPML file</label>
-			<input type="file" id="opml-input" accept=".opml,.xml,text/xml,text/x-opml" />
+			<div class="import-opml">
+				<label for="opml-input">Import OPML file</label>
+				<input type="file" id="opml-input" accept=".opml,.xml,text/xml,text/x-opml" />
+			</div>
 			<p id="status"></p>
 		</section>
 

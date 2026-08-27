@@ -65,9 +65,21 @@ function renderPosts(): void {
 			});
 
 			const meta = document.createElement("span");
-			const feedTitle = currentFeedTitleByUrl.get(post.feedUrl) ?? post.feedUrl;
-			meta.textContent = ` — ${feedTitle} — ${new Date(post.publishedAt).toLocaleString()}`;
+			meta.className = "meta";
 
+			const feedName = document.createElement("span");
+			feedName.className = "feed-name";
+			feedName.textContent = currentFeedTitleByUrl.get(post.feedUrl) ?? post.feedUrl;
+
+			const date = document.createElement("span");
+			date.className = "date";
+			date.textContent = new Date(post.publishedAt).toLocaleDateString(undefined, {
+				year: "numeric",
+				month: "short",
+				day: "numeric",
+			});
+
+			meta.append(feedName, date);
 			li.append(link, meta);
 			return li;
 		}),
@@ -83,8 +95,10 @@ async function markRead(publishedAt: string): Promise<void> {
 // One-time escape hatch: jumps the watermark straight to a date you pick, so
 // a backlog you have no intention of reading in order (e.g. right after
 // importing an OPML with years of history) doesn't have to be clicked through
-// one by one. To catch up to a specific post rather than a whole day, pick
-// that post's date. Doesn't change the normal click-to-advance behavior above.
+// one by one. Excludes the chosen date itself (see cutoff below) — a plain
+// date input can't express a time of day, so "before the chosen day" is the
+// only unambiguous reading. Doesn't change the normal click-to-advance
+// behavior above.
 catchUpButton.addEventListener("click", async () => {
 	const dateValue = catchUpDateInput.value;
 	if (!dateValue) {
@@ -92,9 +106,12 @@ catchUpButton.addEventListener("click", async () => {
 		return;
 	}
 
-	// End of the chosen day (inclusive), so same-day posts still count as read.
-	const cutoff = new Date(`${dateValue}T23:59:59.999Z`).toISOString();
-	if (!confirm(`Mark everything up to ${dateValue} as read?`)) return;
+	// The instant *before* the chosen day starts, so the chosen date itself
+	// stays unread — "up to but not including" rather than "up to and including".
+	const cutoff = new Date(
+		new Date(`${dateValue}T00:00:00.000Z`).getTime() - 1,
+	).toISOString();
+	if (!confirm(`Mark everything before ${dateValue} as read?`)) return;
 
 	await markRead(cutoff);
 });
