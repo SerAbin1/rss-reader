@@ -7,7 +7,11 @@ import {
 } from "../lib/db";
 import { parseFeed, type Post } from "../lib/feed-parser";
 import { parseOpml } from "../lib/opml";
-import { isRead, watermarkAfterClick } from "../lib/read-state";
+import {
+	isRead,
+	watermarkAfterCatchUp,
+	watermarkAfterClick,
+} from "../lib/read-state";
 
 const fileInput = document.querySelector<HTMLInputElement>("#opml-input")!;
 const feedListEl = document.querySelector<HTMLUListElement>("#feed-list")!;
@@ -111,6 +115,16 @@ catchUpButton.addEventListener("click", async () => {
 	const cutoff = new Date(
 		new Date(`${dateValue}T00:00:00.000Z`).getTime() - 1,
 	).toISOString();
+	// Forward-only. Catching up to a date already behind the watermark would
+	// move it backwards — harmless locally, but it's the one non-monotonic
+	// write this app can produce, and once reading state syncs the server's
+	// max() merge discards it: the rewind would survive until the next load
+	// and then silently undo itself. Rejected outright instead.
+	if (watermarkAfterCatchUp(lastReadAt, cutoff) === null) {
+		alert(`Everything before ${dateValue} is already marked read.`);
+		return;
+	}
+
 	if (!confirm(`Mark everything before ${dateValue} as read?`)) return;
 
 	await markRead(cutoff);
