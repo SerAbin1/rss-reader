@@ -224,7 +224,14 @@
 				load; declining costs nothing, since the next clean load pushes
 				the accumulated watermark on its own.
 			*/
-			.sync-banner {
+			/*
+				:not([hidden]), not a bare selector: the `hidden` attribute's
+				built-in `display: none` is a user-agent style, which any
+				author `display` declaration overrides regardless of
+				specificity. Without this, el.hidden = true (used below and in
+				app.ts) would toggle the attribute but change nothing on screen.
+			*/
+			.sync-banner:not([hidden]) {
 				display: flex;
 				align-items: center;
 				flex-wrap: wrap;
@@ -300,7 +307,8 @@
 				opacity: 0.6;
 			}
 
-			.pairing-panel {
+			/* :not([hidden]) — see the .sync-banner rule above for why. */
+			.pairing-panel:not([hidden]) {
 				display: flex;
 				flex-wrap: wrap;
 				gap: 1rem;
