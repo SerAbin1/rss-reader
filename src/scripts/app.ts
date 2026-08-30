@@ -5,7 +5,7 @@ import {
 	saveFeeds,
 	setLastReadAt,
 } from "../lib/db";
-import { parseFeed, type Post } from "../lib/feed-parser";
+import { parseFeed, type ParsedFeed, type Post } from "../lib/feed-parser";
 import { parseOpml } from "../lib/opml";
 import {
 	isRead,
@@ -27,6 +27,7 @@ const catchUpButton =
 // Module state so a click handler (see markReadIfNext below) can re-render
 // without refetching every feed.
 let currentPosts: Post[] = [];
+let currentFeeds: Feed[] = [];
 let currentFeedTitleByUrl = new Map<string, string>();
 let lastReadAt: string | null = null;
 
@@ -34,10 +35,35 @@ function renderFeeds(feeds: Feed[]): void {
 	feedListEl.replaceChildren(
 		...feeds.map((feed) => {
 			const li = document.createElement("li");
-			li.textContent = feed.title;
+			// Plain text until the feed's homepage is known — see rememberSiteUrl.
+			if (feed.siteUrl === undefined) {
+				li.textContent = feed.title;
+				return li;
+			}
+
+			const link = document.createElement("a");
+			link.href = feed.siteUrl;
+			link.textContent = feed.title;
+			link.target = "_blank";
+			link.rel = "noopener noreferrer";
+			li.append(link);
 			return li;
 		}),
 	);
+}
+
+// The feed list renders straight from IndexedDB, before any feed is fetched, so
+// on the very first load links appear one by one as each feed resolves.
+// Persisting what we learn means every later visit has them immediately.
+function rememberSiteUrl(feed: Feed, siteUrl: string | null): void {
+	if (siteUrl === null || feed.siteUrl === siteUrl) return;
+
+	const updated: Feed = { ...feed, siteUrl };
+	currentFeeds = currentFeeds.map((existing) =>
+		existing.feedUrl === feed.feedUrl ? updated : existing,
+	);
+	renderFeeds(currentFeeds);
+	void saveFeeds([updated]);
 }
 
 // Posts are sorted ascending (earliest first), and read/unread is derived from
@@ -130,7 +156,7 @@ catchUpButton.addEventListener("click", async () => {
 	await markRead(cutoff);
 });
 
-async function fetchPosts(feed: Feed): Promise<Post[]> {
+async function fetchPosts(feed: Feed): Promise<ParsedFeed> {
 	const res = await fetch(`/api/feed?url=${encodeURIComponent(feed.feedUrl)}`);
 	if (!res.ok) {
 		throw new Error(`${feed.title}: request failed (${res.status})`);
@@ -175,7 +201,8 @@ async function loadPosts(feeds: Feed[]): Promise<void> {
 	await Promise.allSettled(
 		feeds.map(async (feed) => {
 			try {
-				const posts = await fetchPosts(feed);
+				const { siteUrl, posts } = await fetchPosts(feed);
+				rememberSiteUrl(feed, siteUrl);
 				currentPosts.push(...posts);
 				currentPosts.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
 				renderPosts();
@@ -191,9 +218,9 @@ async function loadPosts(feeds: Feed[]): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
-	const feeds = await getAllFeeds();
-	renderFeeds(feeds);
-	await loadPosts(feeds);
+	currentFeeds = await getAllFeeds();
+	renderFeeds(currentFeeds);
+	await loadPosts(currentFeeds);
 }
 
 fileInput.addEventListener("change", async () => {

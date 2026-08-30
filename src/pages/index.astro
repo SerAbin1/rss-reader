@@ -186,6 +186,20 @@
 				margin-bottom: 1.25rem;
 			}
 
+			/*
+				color: inherit so a feed whose homepage is known looks identical
+				to one whose isn't — the list stays uniform instead of turning
+				into a patchwork of link-blue and plain text as feeds resolve.
+			*/
+			#feed-list a {
+				color: inherit;
+				text-decoration: none;
+			}
+
+			#feed-list a:hover {
+				text-decoration: underline;
+			}
+
 			.import-opml {
 				display: flex;
 				align-items: center;

@@ -1,6 +1,11 @@
 export interface Feed {
 	feedUrl: string;
 	title: string;
+	// The feed's own homepage, discovered from the feed document on load and
+	// cached here so later visits can link it without waiting for a fetch.
+	// Optional: feeds imported before this existed won't have it until their
+	// next successful load.
+	siteUrl?: string;
 }
 
 const DB_NAME = "rss-reader";

@@ -6,7 +6,15 @@ export interface Post {
 	publishedAt: string; // ISO 8601
 }
 
-export function parseFeed(xmlText: string, feedUrl: string): Post[] {
+// A feed document carries channel-level metadata as well as items, so parsing
+// one yields both. `siteUrl` is the feed's own homepage — the human-readable
+// site, not the XML.
+export interface ParsedFeed {
+	siteUrl: string | null;
+	posts: Post[];
+}
+
+export function parseFeed(xmlText: string, feedUrl: string): ParsedFeed {
 	const doc = new DOMParser().parseFromString(xmlText, "text/xml");
 	if (doc.querySelector("parsererror")) {
 		throw new Error("Invalid feed XML");
@@ -14,12 +22,41 @@ export function parseFeed(xmlText: string, feedUrl: string): Post[] {
 
 	const rootName = doc.documentElement?.localName;
 	if (rootName === "rss" || doc.querySelector("rss")) {
-		return parseRss(doc, feedUrl);
+		return { siteUrl: rssSiteUrl(doc), posts: parseRss(doc, feedUrl) };
 	}
 	if (rootName === "feed") {
-		return parseAtom(doc, feedUrl);
+		return { siteUrl: atomSiteUrl(doc), posts: parseAtom(doc, feedUrl) };
 	}
 	throw new Error("Unrecognized feed format (not RSS or Atom)");
+}
+
+// The feed document is the authoritative source for its own homepage. OPML's
+// htmlUrl deliberately isn't used for this: exporters routinely copy the feed
+// URL into it — all 48 feeds in __fixtures__/sample.opml have htmlUrl identical
+// to xmlUrl — which would link the reader at raw XML instead of the site.
+//
+// No fallback (e.g. the feed URL's origin) when a feed declares no link: a
+// guessed origin is wrong for anything served off an aggregator's domain, and a
+// missing link is better than a wrong one. RSS 2.0 requires channel > link and
+// Atom recommends rel="alternate", so real feeds almost always have it.
+function rssSiteUrl(doc: Document): string | null {
+	// Child combinator, not a bare `link`: every <item> has one too.
+	return doc.querySelector("channel > link")?.textContent?.trim() || null;
+}
+
+function atomSiteUrl(doc: Document): string | null {
+	const root = doc.documentElement;
+	if (!root) return null;
+	// Feed-level links only — walking children directly rather than querying,
+	// so <entry>'s own <link> elements can never match.
+	for (const child of root.children) {
+		if (child.localName !== "link") continue;
+		const rel = child.getAttribute("rel");
+		if (!rel || rel === "alternate") {
+			return child.getAttribute("href")?.trim() || null;
+		}
+	}
+	return null;
 }
 
 function parseRss(doc: Document, feedUrl: string): Post[] {
