@@ -23,9 +23,20 @@ jobs:
 
       - run: pnpm build
 
+      # Ahead of the deploy, not after: the new code expects the new schema, so
+      # applying it afterwards leaves a window where live requests 500.
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply rss-reader-sync --remote
+
+      # Project name and build output directory now come from wrangler.toml
+      # rather than being repeated here.
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=my-rss-reader
+          command: pages deploy

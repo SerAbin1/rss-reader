@@ -12,7 +12,9 @@
     "astro": "astro",
     "test": "vitest run",
     "test:watch": "vitest",
-    "pages:dev": "wrangler pages dev dist --compatibility-date=2026-08-27"
+    "pages:dev": "wrangler pages dev",
+    "d1:migrate": "wrangler d1 migrations apply rss-reader-sync --local",
+    "d1:migrate:remote": "wrangler d1 migrations apply rss-reader-sync --remote"
   },
   "dependencies": {
     "astro": "^7.2.8"
