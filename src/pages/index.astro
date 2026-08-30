@@ -262,6 +262,80 @@
 			.sync-banner-actions button:hover {
 				border-color: var(--muted);
 			}
+
+			.sync-setup {
+				margin-top: 2.5rem;
+				padding-top: 1.5rem;
+				border-top: 1px solid var(--border);
+				font-size: 0.8rem;
+				color: var(--muted);
+			}
+
+			.sync-setup h2 {
+				font-family: var(--font-sans);
+				font-weight: 600;
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--muted);
+				margin: 0 0 0.75rem;
+			}
+
+			.sync-setup button {
+				font: inherit;
+				color: var(--fg);
+				background: var(--control-bg);
+				border: 1px solid var(--border);
+				border-radius: 3px;
+				padding: 0.4rem 0.7rem;
+				cursor: pointer;
+			}
+
+			.sync-setup button:hover {
+				border-color: var(--muted);
+			}
+
+			.sync-setup button:disabled {
+				cursor: default;
+				opacity: 0.6;
+			}
+
+			.pairing-panel {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 1rem;
+				align-items: flex-start;
+				margin-top: 1rem;
+				padding: 1rem;
+				background: var(--control-bg);
+				border: 1px solid var(--border);
+				border-radius: 4px;
+			}
+
+			.pairing-panel canvas {
+				background: #fff;
+				border-radius: 3px;
+			}
+
+			.pairing-panel-details {
+				flex: 1 1 14rem;
+			}
+
+			.pairing-panel-details p {
+				margin: 0 0 0.5rem;
+			}
+
+			.pairing-code {
+				font-family: var(--font-sans);
+				font-size: 1.1rem;
+				font-weight: 600;
+				letter-spacing: 0.08em;
+				color: var(--fg);
+			}
+
+			#sync-setup-status {
+				margin: 0.5rem 0 0;
+			}
 		</style>
 	</head>
 	<body>
@@ -312,6 +386,29 @@
 				<input type="file" id="opml-input" accept=".opml,.xml,text/xml,text/x-opml" />
 			</div>
 			<p id="status"></p>
+		</section>
+
+		<!--
+			Sync is opt-in: reading position and feeds stay local until a second
+			device is paired. The button's label and this panel are driven entirely
+			by app.ts — see the "device token is the paired flag" note in db.ts.
+		-->
+		<section class="sync-setup">
+			<h2>Sync across devices</h2>
+			<button id="sync-setup-button" type="button">Set up sync</button>
+			<div id="pairing-panel" class="pairing-panel" hidden>
+				<canvas id="pairing-qr" width="200" height="200"></canvas>
+				<div class="pairing-panel-details">
+					<p>
+						Scan this with your other device's camera, or open
+						<code id="pairing-url"></code> there and enter code
+						<span id="pairing-code" class="pairing-code"></span>
+					</p>
+					<p id="pairing-expiry"></p>
+					<button id="pairing-done" type="button">Done</button>
+				</div>
+			</div>
+			<p id="sync-setup-status"></p>
 		</section>
 
 		<script src="../scripts/app.ts"></script>

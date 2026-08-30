@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	formatPairCode,
 	isPairCodeUsable,
 	liveFeeds,
 	mergeFeeds,
@@ -69,6 +70,12 @@ describe("isPairCodeUsable", () => {
 		expect(isPairCodeUsable({ expiresAt: 2000, claimedAt: null }, 2000)).toBe(
 			false,
 		);
+	});
+});
+
+describe("formatPairCode", () => {
+	it("splits a 10-character code into two groups of five", () => {
+		expect(formatPairCode("ABCDEFGHJK")).toBe("ABCDE-FGHJK");
 	});
 });
 

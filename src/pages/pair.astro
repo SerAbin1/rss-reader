@@ -1,0 +1,125 @@
+---
+
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Pair device — RSS Reader</title>
+		<style is:global>
+			:root {
+				--font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+				--bg: #faf8f4;
+				--fg: #22201c;
+				--muted: #79715f;
+				--border: #e4ded0;
+				--control-bg: #f2eee4;
+			}
+
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: #18160f;
+					--fg: #eae5d9;
+					--muted: #948c78;
+					--border: #332e22;
+					--control-bg: #221f17;
+				}
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html {
+				background: var(--bg);
+			}
+
+			body {
+				background: var(--bg);
+				color: var(--fg);
+				font-family: var(--font-sans);
+				line-height: 1.5;
+				max-width: 24rem;
+				margin: 0 auto;
+				padding: 3rem 1.5rem 5rem;
+			}
+
+			h1 {
+				font-size: 1.1rem;
+				margin: 0 0 1rem;
+			}
+
+			p {
+				color: var(--muted);
+				font-size: 0.9rem;
+			}
+
+			form {
+				display: flex;
+				gap: 0.5rem;
+				margin-top: 1.5rem;
+			}
+
+			input,
+			button {
+				font: inherit;
+				color: var(--fg);
+				border: 1px solid var(--border);
+				border-radius: 3px;
+				padding: 0.5rem 0.7rem;
+			}
+
+			input {
+				flex: 1;
+				background: var(--control-bg);
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+			}
+
+			button {
+				background: var(--bg);
+				cursor: pointer;
+			}
+
+			button:hover {
+				border-color: var(--muted);
+			}
+
+			button:disabled {
+				cursor: default;
+				opacity: 0.6;
+			}
+
+			#pair-status {
+				margin-top: 1rem;
+				font-size: 0.85rem;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Pair this device</h1>
+		<p>
+			Enter the code shown on your other device, or scan its QR code —
+			scanning fills this in and pairs automatically.
+		</p>
+		<form id="pair-form">
+			<input
+				type="text"
+				id="pair-code-input"
+				placeholder="ABCDE-FGHJK"
+				autocomplete="off"
+				autocapitalize="characters"
+				spellcheck="false"
+			/>
+			<button id="pair-submit" type="submit">Pair</button>
+		</form>
+		<p id="pair-status"></p>
+
+		<script src="../scripts/pair.ts"></script>
+	</body>
+</html>

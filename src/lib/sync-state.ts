@@ -38,6 +38,13 @@ export function isPairCodeUsable(code: PairCode, now: number): boolean {
 	return code.claimedAt === null && code.expiresAt > now;
 }
 
+// Displayed grouped (ABCDE-FGHJK) purely for human legibility — the server's
+// normalizePairCode strips non-alphanumerics before hashing, so the hyphen
+// carries no meaning to it and typing or pasting it back in is optional.
+export function formatPairCode(code: string): string {
+	return `${code.slice(0, 5)}-${code.slice(5)}`;
+}
+
 // Per-feed last-write-wins over the union of both sides, keyed by feedUrl.
 // Unlike the watermark this is not a grow-only set — without tombstones a feed
 // deleted on one device would be resurrected by the other on the next merge —

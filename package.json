@@ -17,12 +17,14 @@
     "d1:migrate:remote": "wrangler d1 migrations apply rss-reader-sync --remote"
   },
   "dependencies": {
-    "astro": "^7.2.8"
+    "astro": "^7.2.8",
+    "qrcode": "^1.5.4"
   },
   "allowScripts": {
     "esbuild": true
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",

@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import {
 	deleteFeeds,
 	type Feed,
@@ -5,6 +6,7 @@ import {
 	getDeviceToken,
 	getLastReadAt,
 	saveFeeds,
+	setDeviceToken,
 	setLastReadAt,
 } from "../lib/db";
 import { parseFeed, type ParsedFeed, type Post } from "../lib/feed-parser";
@@ -14,8 +16,9 @@ import {
 	pullWatermark,
 	pushFeedChanges,
 	pushWatermark,
+	startPairing,
 } from "../lib/sync-client";
-import { mergeWatermark } from "../lib/sync-state";
+import { formatPairCode, mergeWatermark } from "../lib/sync-state";
 import {
 	isRead,
 	watermarkAfterCatchUp,
@@ -39,6 +42,20 @@ const syncBannerPushButton =
 	document.querySelector<HTMLButtonElement>("#sync-banner-push")!;
 const syncBannerDismissButton =
 	document.querySelector<HTMLButtonElement>("#sync-banner-dismiss")!;
+const syncSetupButton =
+	document.querySelector<HTMLButtonElement>("#sync-setup-button")!;
+const syncSetupStatusEl =
+	document.querySelector<HTMLParagraphElement>("#sync-setup-status")!;
+const pairingPanelEl =
+	document.querySelector<HTMLDivElement>("#pairing-panel")!;
+const pairingQrCanvas =
+	document.querySelector<HTMLCanvasElement>("#pairing-qr")!;
+const pairingUrlEl = document.querySelector<HTMLElement>("#pairing-url")!;
+const pairingCodeEl = document.querySelector<HTMLElement>("#pairing-code")!;
+const pairingExpiryEl =
+	document.querySelector<HTMLParagraphElement>("#pairing-expiry")!;
+const pairingDoneButton =
+	document.querySelector<HTMLButtonElement>("#pairing-done")!;
 
 // Module state so a click handler (see markReadIfNext below) can re-render
 // without refetching every feed.
@@ -224,6 +241,74 @@ syncBannerDismissButton.addEventListener("click", () => {
 	hideDegradedBanner();
 });
 
+// Ticks the countdown on the open pairing panel; cleared whenever the panel
+// is hidden or replaced with a fresh code, so at most one runs at a time.
+let pairingExpiryTimer: ReturnType<typeof setInterval> | undefined;
+
+function updateSyncSetupButton(): void {
+	syncSetupButton.textContent =
+		syncToken === null ? "Set up sync" : "Add another device";
+}
+
+function updatePairingExpiry(expiresAt: number): void {
+	clearInterval(pairingExpiryTimer);
+	const tick = () => {
+		const secondsLeft = Math.round((expiresAt - Date.now()) / 1000);
+		if (secondsLeft <= 0) {
+			pairingExpiryEl.textContent = "This code has expired.";
+			clearInterval(pairingExpiryTimer);
+			return;
+		}
+		const minutesLeft = Math.ceil(secondsLeft / 60);
+		pairingExpiryEl.textContent = `Expires in ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}.`;
+	};
+	tick();
+	pairingExpiryTimer = setInterval(tick, 1000);
+}
+
+function showPairingPanel(pairCode: string, expiresAt: number): void {
+	pairingCodeEl.textContent = formatPairCode(pairCode);
+	pairingUrlEl.textContent = `${location.origin}/pair`;
+	pairingPanelEl.hidden = false;
+	updatePairingExpiry(expiresAt);
+	// The code travels in the URL fragment, never the query string or path, so
+	// it never reaches a server access log — see the Obsidian decision log.
+	void QRCode.toCanvas(pairingQrCanvas, `${location.origin}/pair#${pairCode}`, {
+		width: 200,
+	});
+}
+
+function hidePairingPanel(): void {
+	pairingPanelEl.hidden = true;
+	clearInterval(pairingExpiryTimer);
+}
+
+syncSetupButton.addEventListener("click", async () => {
+	syncSetupButton.disabled = true;
+	syncSetupStatusEl.textContent = "";
+	try {
+		const result = await startPairing(syncToken, lastReadAt);
+		if (result.deviceToken !== undefined) {
+			await setDeviceToken(result.deviceToken);
+			syncToken = result.deviceToken;
+			updateSyncSetupButton();
+			// First pairing: this device's feeds and watermark have never been
+			// pushed anywhere. Reuse the normal load sequence rather than
+			// re-deriving reconcile-then-push here — refresh() already does
+			// exactly that whenever syncToken is non-null.
+			void refresh();
+		}
+		showPairingPanel(result.pairCode, result.expiresAt);
+	} catch (err) {
+		console.error(err);
+		syncSetupStatusEl.textContent = "Couldn't start pairing. Try again.";
+	} finally {
+		syncSetupButton.disabled = false;
+	}
+});
+
+pairingDoneButton.addEventListener("click", hidePairingPanel);
+
 function applyWatermark(next: string | null): void {
 	if (next === null || next === lastReadAt) return;
 	lastReadAt = next;
@@ -370,6 +455,7 @@ async function reconcileFeeds(token: string): Promise<Feed[]> {
 
 async function refresh(): Promise<void> {
 	syncToken = await getDeviceToken();
+	updateSyncSetupButton();
 	feedsReconciled = false;
 	degradedBannerPrompted = false;
 	hideDegradedBanner();
