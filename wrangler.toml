@@ -12,11 +12,11 @@ pages_build_output_dir = "dist"
 # behaviour under us. Bumping it is a deliberate opt-in to newer semantics.
 compatibility_date = "2026-08-27"
 
-# Cross-device reading-state sync. Create the database once with
-#   pnpm exec wrangler d1 create rss-reader-sync
-# and paste the returned id below — it is an identifier, not a secret, and is
-# meant to be committed.
+# Cross-device reading-state sync. Created with `wrangler d1 create
+# rss-reader-sync` (region APAC). The id is an identifier, not a secret, and is
+# meant to be committed. `binding` is ours to choose — wrangler's suggested
+# snippet says rss_reader_sync, but the code reads env.DB.
 [[d1_databases]]
 binding = "DB"
 database_name = "rss-reader-sync"
-database_id = "REPLACE_ME_AFTER_d1_create"
+database_id = "fcf7783c-890c-4916-83b9-ef090885fc1d"
