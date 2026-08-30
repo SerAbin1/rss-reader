@@ -1,12 +1,21 @@
 import {
+	deleteFeeds,
 	type Feed,
 	getAllFeeds,
+	getDeviceToken,
 	getLastReadAt,
 	saveFeeds,
 	setLastReadAt,
 } from "../lib/db";
 import { parseFeed, type ParsedFeed, type Post } from "../lib/feed-parser";
 import { parseOpml } from "../lib/opml";
+import {
+	pullFeeds,
+	pullWatermark,
+	pushFeedChanges,
+	pushWatermark,
+} from "../lib/sync-client";
+import { mergeWatermark } from "../lib/sync-state";
 import {
 	isRead,
 	watermarkAfterCatchUp,
@@ -30,6 +39,22 @@ let currentPosts: Post[] = [];
 let currentFeeds: Feed[] = [];
 let currentFeedTitleByUrl = new Map<string, string>();
 let lastReadAt: string | null = null;
+
+// Load progress, module-scoped so the push gate below can read the *final*
+// failure count rather than a provisional one.
+let totalFeeds = 0;
+let settledFeeds = 0;
+let failures = 0;
+
+// Null means this device never opted into sync; it then never touches the
+// network and behaves exactly as before.
+let syncToken: string | null = null;
+
+// Whether this load managed to confirm its feed set against the group. The
+// watermark is never pushed while this is false: a device whose feed list is
+// unconfirmed may be missing a feed another device added, and pushing from
+// that view marks posts read that were never shown anywhere.
+let feedsReconciled = false;
 
 function renderFeeds(feeds: Feed[]): void {
 	feedListEl.replaceChildren(
@@ -120,6 +145,36 @@ async function markRead(publishedAt: string): Promise<void> {
 	lastReadAt = publishedAt;
 	await setLastReadAt(publishedAt);
 	renderPosts();
+	void pushWatermarkIfAllowed();
+}
+
+// Local state is authoritative and already saved by the time this runs; the
+// push is best-effort. Nothing is queued on failure — max() means the next
+// successful push carries the accumulated watermark in one go.
+async function pushWatermarkIfAllowed(): Promise<void> {
+	if (syncToken === null || lastReadAt === null) return;
+	// Not while feeds are still arriving: a click at second one would see
+	// failures === 0 while a feed is still in flight and about to fail.
+	if (settledFeeds < totalFeeds) return;
+	if (!feedsReconciled) return;
+	// Step 6 turns this into a prompt rather than a silent refusal.
+	if (failures > 0) return;
+
+	try {
+		const winner = await pushWatermark(syncToken, lastReadAt);
+		// The server applies max(), so a push carrying a lower value comes back
+		// with the stored higher one. Adopt it rather than believing our own.
+		applyWatermark(mergeWatermark(lastReadAt, winner));
+	} catch (err) {
+		console.error(err);
+	}
+}
+
+function applyWatermark(next: string | null): void {
+	if (next === null || next === lastReadAt) return;
+	lastReadAt = next;
+	void setLastReadAt(next);
+	renderPosts();
 }
 
 // One-time escape hatch: jumps the watermark straight to a date you pick, so
@@ -164,11 +219,7 @@ async function fetchPosts(feed: Feed): Promise<ParsedFeed> {
 	return parseFeed(await res.text(), feed.feedUrl);
 }
 
-function updateLoadStatus(
-	totalFeeds: number,
-	settledFeeds: number,
-	failures: number,
-): void {
+function updateLoadStatus(): void {
 	const unreadCount = currentPosts.filter(
 		(post) => !isRead(post.publishedAt, lastReadAt),
 	).length;
@@ -183,7 +234,10 @@ function updateLoadStatus(
 // to finish before showing anything.
 async function loadPosts(feeds: Feed[]): Promise<void> {
 	currentPosts = [];
-	currentFeedTitleByUrl = new Map(feeds.map((feed) => [feed.feedUrl, feed.title]));
+	currentFeedTitleByUrl = new Map();
+	totalFeeds = 0;
+	settledFeeds = 0;
+	failures = 0;
 
 	if (feeds.length === 0) {
 		postListEl.replaceChildren();
@@ -193,10 +247,18 @@ async function loadPosts(feeds: Feed[]): Promise<void> {
 
 	lastReadAt = await getLastReadAt();
 	renderPosts();
+	await loadInto(feeds);
+}
 
-	let settledFeeds = 0;
-	let failures = 0;
-	updateLoadStatus(feeds.length, settledFeeds, failures);
+// Loads a batch of feeds into the running list without resetting it, so feeds
+// that arrive late from a sync reconcile merge into the same sorted view that
+// the local ones are already rendering into.
+async function loadInto(feeds: Feed[]): Promise<void> {
+	totalFeeds += feeds.length;
+	for (const feed of feeds) {
+		currentFeedTitleByUrl.set(feed.feedUrl, feed.title);
+	}
+	updateLoadStatus();
 
 	await Promise.allSettled(
 		feeds.map(async (feed) => {
@@ -211,16 +273,89 @@ async function loadPosts(feeds: Feed[]): Promise<void> {
 				console.error(err);
 			} finally {
 				settledFeeds++;
-				updateLoadStatus(feeds.length, settledFeeds, failures);
+				updateLoadStatus();
 			}
 		}),
 	);
 }
 
-async function refresh(): Promise<void> {
+// Reconciles this device's feed list with the group's. Returns the feeds that
+// were not known locally, so their posts can be loaded into the view that is
+// already rendering.
+//
+// The server is authoritative: it owns the timestamps and therefore the
+// last-write-wins outcome. This device only reports what it has that the group
+// does not, and then adopts the result.
+async function reconcileFeeds(token: string): Promise<Feed[]> {
+	const remote = await pullFeeds(token);
+	const remoteUrls = new Set(remote.map((feed) => feed.feedUrl));
+
+	// Local-only feeds are adds this device made before pairing or while
+	// offline. (There is no local delete yet, so a feed missing here can only
+	// mean "never pushed", never "deleted locally" — revisit when removal
+	// lands, since the two become indistinguishable.)
+	const additions = currentFeeds.filter((feed) => !remoteUrls.has(feed.feedUrl));
+	const group =
+		additions.length > 0 ? await pushFeedChanges(token, additions) : remote;
+
+	const live = group.filter((feed) => feed.deletedAt === null);
+	const tombstoned = group
+		.filter((feed) => feed.deletedAt !== null)
+		.map((feed) => feed.feedUrl);
+
+	const localUrls = new Set(currentFeeds.map((feed) => feed.feedUrl));
+	const arrived = live.filter((feed) => !localUrls.has(feed.feedUrl));
+
+	await saveFeeds(live.map(({ feedUrl, title }) => ({ feedUrl, title })));
+	await deleteFeeds(tombstoned);
+
 	currentFeeds = await getAllFeeds();
 	renderFeeds(currentFeeds);
+	return arrived.map(({ feedUrl, title }) => ({ feedUrl, title }));
+}
+
+async function refresh(): Promise<void> {
+	syncToken = await getDeviceToken();
+	feedsReconciled = false;
+	currentFeeds = await getAllFeeds();
+	renderFeeds(currentFeeds);
+
+	// Reconcile runs alongside the first paint rather than gating it: the common
+	// case is that nothing changed, and making every load wait on a round trip
+	// would trade the app's one genuinely fast moment for nothing. Feeds the
+	// reconcile turns up are loaded straight into the list that is already
+	// rendering — incremental rendering merges late arrivals anyway.
+	const reconciling =
+		syncToken === null ? null : reconcileFeeds(syncToken).catch((err) => {
+			console.error(err);
+			return null;
+		});
+
 	await loadPosts(currentFeeds);
+
+	if (reconciling !== null) {
+		const arrived = await reconciling;
+		if (arrived !== null) {
+			feedsReconciled = true;
+			if (arrived.length > 0) await loadInto(arrived);
+		}
+	}
+
+	if (syncToken !== null) {
+		await pullWatermarkIntoLocal(syncToken);
+		await pushWatermarkIfAllowed();
+	}
+}
+
+// Pulling is safe even from a degraded load: max() can only move the watermark
+// forward, and the remote value is another device's claim from a load that may
+// well have been complete. Only the push is ever gated.
+async function pullWatermarkIntoLocal(token: string): Promise<void> {
+	try {
+		applyWatermark(mergeWatermark(lastReadAt, await pullWatermark(token)));
+	} catch (err) {
+		console.error(err);
+	}
 }
 
 fileInput.addEventListener("change", async () => {

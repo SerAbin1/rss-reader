@@ -13,6 +13,7 @@ const DB_VERSION = 2;
 const FEEDS_STORE = "feeds";
 const META_STORE = "meta";
 const LAST_READ_AT_KEY = "lastReadAt";
+const DEVICE_TOKEN_KEY = "deviceToken";
 
 function openDb(): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
@@ -76,6 +77,46 @@ export async function setLastReadAt(publishedAt: string): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(META_STORE, "readwrite");
 		tx.objectStore(META_STORE).put(publishedAt, LAST_READ_AT_KEY);
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
+	});
+}
+
+// Feeds removed on another paired device arrive as tombstones and are deleted
+// locally. Takes URLs rather than records since that's all the caller has.
+export async function deleteFeeds(feedUrls: string[]): Promise<void> {
+	if (feedUrls.length === 0) return;
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(FEEDS_STORE, "readwrite");
+		const store = tx.objectStore(FEEDS_STORE);
+		for (const feedUrl of feedUrls) {
+			store.delete(feedUrl);
+		}
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
+	});
+}
+
+// The device's sync credential. Its presence is also what "this device is
+// paired" means — there is no separate flag to fall out of step with it.
+// Lives in the same meta store as the watermark: out-of-line keys, so a new
+// key needs no schema change and no DB_VERSION bump.
+export async function getDeviceToken(): Promise<string | null> {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(META_STORE, "readonly");
+		const request = tx.objectStore(META_STORE).get(DEVICE_TOKEN_KEY);
+		request.onsuccess = () => resolve(request.result ?? null);
+		request.onerror = () => reject(request.error);
+	});
+}
+
+export async function setDeviceToken(token: string): Promise<void> {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(META_STORE, "readwrite");
+		tx.objectStore(META_STORE).put(token, DEVICE_TOKEN_KEY);
 		tx.oncomplete = () => resolve();
 		tx.onerror = () => reject(tx.error);
 	});
