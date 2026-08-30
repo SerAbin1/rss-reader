@@ -61,6 +61,10 @@ const pairingDoneButton =
 // without refetching every feed.
 let currentPosts: Post[] = [];
 let currentFeeds: Feed[] = [];
+// The site's own feed list: ships with the build, fetched fresh every load,
+// identical for every visitor. Never written to IndexedDB or pushed to a
+// sync group — see the Obsidian decision log's curated-feed-list entry.
+let curatedFeeds: Feed[] = [];
 let currentFeedTitleByUrl = new Map<string, string>();
 let lastReadAt: string | null = null;
 
@@ -107,18 +111,31 @@ function renderFeeds(feeds: Feed[]): void {
 	);
 }
 
-// The feed list renders straight from IndexedDB, before any feed is fetched, so
-// on the very first load links appear one by one as each feed resolves.
-// Persisting what we learn means every later visit has them immediately.
+function renderAllFeeds(): void {
+	renderFeeds([...curatedFeeds, ...currentFeeds]);
+}
+
+// The feed list renders straight from IndexedDB/the curated fetch, before any
+// feed is fetched, so on the very first load links appear one by one as each
+// feed resolves. Curated feeds aren't persisted here — they're re-fetched
+// fresh every load, so there's nowhere for the discovery to usefully live
+// beyond this session; personal feeds persist to IndexedDB so later visits
+// have them immediately.
 function rememberSiteUrl(feed: Feed, siteUrl: string | null): void {
 	if (siteUrl === null || feed.siteUrl === siteUrl) return;
 
 	const updated: Feed = { ...feed, siteUrl };
-	currentFeeds = currentFeeds.map((existing) =>
-		existing.feedUrl === feed.feedUrl ? updated : existing,
-	);
-	renderFeeds(currentFeeds);
-	void saveFeeds([updated]);
+	if (curatedFeeds.some((existing) => existing.feedUrl === feed.feedUrl)) {
+		curatedFeeds = curatedFeeds.map((existing) =>
+			existing.feedUrl === feed.feedUrl ? updated : existing,
+		);
+	} else {
+		currentFeeds = currentFeeds.map((existing) =>
+			existing.feedUrl === feed.feedUrl ? updated : existing,
+		);
+		void saveFeeds([updated]);
+	}
+	renderAllFeeds();
 }
 
 // Posts are sorted ascending (earliest first), and read/unread is derived from
@@ -425,19 +442,37 @@ async function loadInto(feeds: Feed[]): Promise<void> {
 // The server is authoritative: it owns the timestamps and therefore the
 // last-write-wins outcome. This device only reports what it has that the group
 // does not, and then adopts the result.
-async function reconcileFeeds(token: string): Promise<Feed[]> {
+async function reconcileFeeds(
+	token: string,
+	curatedUrls: Set<string>,
+): Promise<Feed[]> {
 	const remote = await pullFeeds(token);
 	const remoteUrls = new Set(remote.map((feed) => feed.feedUrl));
 
 	// Local-only feeds are adds this device made before pairing or while
 	// offline. (There is no local delete yet, so a feed missing here can only
 	// mean "never pushed", never "deleted locally" — revisit when removal
-	// lands, since the two become indistinguishable.)
-	const additions = currentFeeds.filter((feed) => !remoteUrls.has(feed.feedUrl));
-	const group =
-		additions.length > 0 ? await pushFeedChanges(token, additions) : remote;
+	// lands, since the two become indistinguishable.) Curated feeds are never
+	// pushed as additions — they're identical for every group already.
+	const additions = currentFeeds.filter(
+		(feed) => !remoteUrls.has(feed.feedUrl) && !curatedUrls.has(feed.feedUrl),
+	);
+	// A feed that's curated as of this load but still sits live in the group's
+	// delta predates the curated list (see the Obsidian decision log's
+	// migration note) — retract it from the group too, in the same request, or
+	// every paired device's next pull just resurrects it as "personal".
+	const shadowedInGroup = remote
+		.filter((feed) => feed.deletedAt === null && curatedUrls.has(feed.feedUrl))
+		.map((feed) => feed.feedUrl);
 
-	const live = group.filter((feed) => feed.deletedAt === null);
+	const group =
+		additions.length > 0 || shadowedInGroup.length > 0
+			? await pushFeedChanges(token, additions, shadowedInGroup)
+			: remote;
+
+	const live = group.filter(
+		(feed) => feed.deletedAt === null && !curatedUrls.has(feed.feedUrl),
+	);
 	const tombstoned = group
 		.filter((feed) => feed.deletedAt !== null)
 		.map((feed) => feed.feedUrl);
@@ -449,8 +484,22 @@ async function reconcileFeeds(token: string): Promise<Feed[]> {
 	await deleteFeeds(tombstoned);
 
 	currentFeeds = await getAllFeeds();
-	renderFeeds(currentFeeds);
+	renderAllFeeds();
 	return arrived.map(({ feedUrl, title }) => ({ feedUrl, title }));
+}
+
+// Fetched fresh every load — same-origin static asset, ships with the build,
+// identical for every visitor. A fetch failure just means no curated feeds
+// this load rather than a blocked page; see the Obsidian decision log.
+async function loadCuratedFeeds(): Promise<Feed[]> {
+	try {
+		const res = await fetch("/curated-feeds.opml");
+		if (!res.ok) return [];
+		return parseOpml(await res.text());
+	} catch (err) {
+		console.error(err);
+		return [];
+	}
 }
 
 async function refresh(): Promise<void> {
@@ -459,8 +508,22 @@ async function refresh(): Promise<void> {
 	feedsReconciled = false;
 	degradedBannerPrompted = false;
 	hideDegradedBanner();
+
 	currentFeeds = await getAllFeeds();
-	renderFeeds(currentFeeds);
+	curatedFeeds = await loadCuratedFeeds();
+	const curatedUrls = new Set(curatedFeeds.map((feed) => feed.feedUrl));
+
+	// A feed that's curated as of this load but still sits in this device's
+	// personal store predates the curated list — drop the personal copy so it
+	// isn't rendered twice. reconcileFeeds below retracts it from the sync
+	// group too, for any device paired to one.
+	const shadowed = currentFeeds.filter((feed) => curatedUrls.has(feed.feedUrl));
+	if (shadowed.length > 0) {
+		await deleteFeeds(shadowed.map((feed) => feed.feedUrl));
+		currentFeeds = currentFeeds.filter((feed) => !curatedUrls.has(feed.feedUrl));
+	}
+
+	renderAllFeeds();
 
 	// Reconcile runs alongside the first paint rather than gating it: the common
 	// case is that nothing changed, and making every load wait on a round trip
@@ -468,12 +531,12 @@ async function refresh(): Promise<void> {
 	// reconcile turns up are loaded straight into the list that is already
 	// rendering — incremental rendering merges late arrivals anyway.
 	const reconciling =
-		syncToken === null ? null : reconcileFeeds(syncToken).catch((err) => {
+		syncToken === null ? null : reconcileFeeds(syncToken, curatedUrls).catch((err) => {
 			console.error(err);
 			return null;
 		});
 
-	await loadPosts(currentFeeds);
+	await loadPosts([...curatedFeeds, ...currentFeeds]);
 
 	if (reconciling !== null) {
 		const arrived = await reconciling;
@@ -505,9 +568,14 @@ fileInput.addEventListener("change", async () => {
 	if (!file) return;
 
 	try {
-		const feeds = parseOpml(await file.text());
+		const curatedUrls = new Set(curatedFeeds.map((feed) => feed.feedUrl));
+		// A feed already on the curated list needs no personal copy — it would
+		// only render twice and get retracted again on the next reconcile.
+		const feeds = parseOpml(await file.text()).filter(
+			(feed) => !curatedUrls.has(feed.feedUrl),
+		);
 		if (feeds.length === 0) {
-			statusEl.textContent = "No feeds found in that OPML file.";
+			statusEl.textContent = "No new feeds found in that OPML file.";
 			return;
 		}
 		await saveFeeds(feeds);
