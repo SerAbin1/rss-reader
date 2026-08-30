@@ -216,6 +216,52 @@
 			#status {
 				margin: 0.5rem 0 0;
 			}
+
+			/*
+				Asks before pushing a watermark from a degraded load (some feeds
+				failed to fetch) — see "a degraded load asks before pushing the
+				watermark" in the Obsidian decision log. Shown at most once per
+				load; declining costs nothing, since the next clean load pushes
+				the accumulated watermark on its own.
+			*/
+			.sync-banner {
+				display: flex;
+				align-items: center;
+				flex-wrap: wrap;
+				gap: 0.5rem 1rem;
+				font-size: 0.8rem;
+				color: var(--fg);
+				background: var(--control-bg);
+				border: 1px solid var(--border);
+				border-radius: 4px;
+				padding: 0.75rem 1rem;
+				margin-bottom: 2.25rem;
+			}
+
+			.sync-banner p {
+				margin: 0;
+				flex: 1 1 16rem;
+			}
+
+			.sync-banner-actions {
+				display: flex;
+				gap: 0.5rem;
+				flex-shrink: 0;
+			}
+
+			.sync-banner-actions button {
+				font: inherit;
+				color: var(--fg);
+				background: var(--bg);
+				border: 1px solid var(--border);
+				border-radius: 3px;
+				padding: 0.3rem 0.6rem;
+				cursor: pointer;
+			}
+
+			.sync-banner-actions button:hover {
+				border-color: var(--muted);
+			}
 		</style>
 	</head>
 	<body>
@@ -227,6 +273,18 @@
 		<!-- Main content: posts from all subscribed feeds. -->
 		<main>
 			<p id="posts-status"></p>
+			<!--
+				Degraded-load consent banner. Appears at most once per load, only
+				when some feed failed and the local watermark would otherwise sit
+				unpushed with no explanation. See app.ts's pushWatermarkIfAllowed.
+			-->
+			<div id="sync-banner" class="sync-banner" role="alert" hidden>
+				<p id="sync-banner-message"></p>
+				<div class="sync-banner-actions">
+					<button id="sync-banner-push" type="button">Push anyway</button>
+					<button id="sync-banner-dismiss" type="button">Keep local</button>
+				</div>
+			</div>
 			<!--
 				One-time escape hatch for a backlog you have no intention of reading
 				through in order (e.g. right after importing an OPML with years of

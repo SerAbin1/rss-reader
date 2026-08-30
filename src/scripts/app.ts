@@ -32,6 +32,13 @@ const catchUpDateInput =
 	document.querySelector<HTMLInputElement>("#catch-up-date")!;
 const catchUpButton =
 	document.querySelector<HTMLButtonElement>("#catch-up-button")!;
+const syncBannerEl = document.querySelector<HTMLDivElement>("#sync-banner")!;
+const syncBannerMessageEl =
+	document.querySelector<HTMLParagraphElement>("#sync-banner-message")!;
+const syncBannerPushButton =
+	document.querySelector<HTMLButtonElement>("#sync-banner-push")!;
+const syncBannerDismissButton =
+	document.querySelector<HTMLButtonElement>("#sync-banner-dismiss")!;
 
 // Module state so a click handler (see markReadIfNext below) can re-render
 // without refetching every feed.
@@ -55,6 +62,12 @@ let syncToken: string | null = null;
 // unconfirmed may be missing a feed another device added, and pushing from
 // that view marks posts read that were never shown anywhere.
 let feedsReconciled = false;
+
+// Whether the degraded-load banner has already been shown (or would have
+// been) for the current load. markRead fires on every click, so without this
+// a run of clicks against a degraded load would reopen the banner — or worse,
+// silently re-decide it — after the user already dismissed it once.
+let degradedBannerPrompted = false;
 
 function renderFeeds(feeds: Feed[]): void {
 	feedListEl.replaceChildren(
@@ -157,9 +170,20 @@ async function pushWatermarkIfAllowed(): Promise<void> {
 	// failures === 0 while a feed is still in flight and about to fail.
 	if (settledFeeds < totalFeeds) return;
 	if (!feedsReconciled) return;
-	// Step 6 turns this into a prompt rather than a silent refusal.
-	if (failures > 0) return;
+	// A failed feed only misleads this device — until sync. Pushing from here
+	// would make that watermark authoritative on a device where those feeds
+	// loaded fine, marking posts read that were never shown anywhere. Ask
+	// first, via the banner, rather than silently refusing or silently pushing.
+	if (failures > 0) {
+		showDegradedBanner();
+		return;
+	}
 
+	await pushWatermarkNow();
+}
+
+async function pushWatermarkNow(): Promise<void> {
+	if (syncToken === null || lastReadAt === null) return;
 	try {
 		const winner = await pushWatermark(syncToken, lastReadAt);
 		// The server applies max(), so a push carrying a lower value comes back
@@ -169,6 +193,36 @@ async function pushWatermarkIfAllowed(): Promise<void> {
 		console.error(err);
 	}
 }
+
+// Shown at most once per load (see degradedBannerPrompted): by the time this
+// runs, feeds have settled and reconciled, so every later click this load
+// would ask the identical question. Declining costs nothing — the value stays
+// local, and the next clean load pushes the whole accumulated watermark on
+// its own — so the message says that, to make "keep local" an easy choice.
+function showDegradedBanner(): void {
+	if (degradedBannerPrompted) return;
+	degradedBannerPrompted = true;
+
+	syncBannerMessageEl.textContent =
+		`${failures} feed${failures === 1 ? "" : "s"} failed to load, so this ` +
+		"device's reading position wasn't sent to your other devices. It's " +
+		"saved locally either way — the next load that succeeds will sync it " +
+		"automatically.";
+	syncBannerEl.hidden = false;
+}
+
+function hideDegradedBanner(): void {
+	syncBannerEl.hidden = true;
+}
+
+syncBannerPushButton.addEventListener("click", async () => {
+	hideDegradedBanner();
+	await pushWatermarkNow();
+});
+
+syncBannerDismissButton.addEventListener("click", () => {
+	hideDegradedBanner();
+});
 
 function applyWatermark(next: string | null): void {
 	if (next === null || next === lastReadAt) return;
@@ -317,6 +371,8 @@ async function reconcileFeeds(token: string): Promise<Feed[]> {
 async function refresh(): Promise<void> {
 	syncToken = await getDeviceToken();
 	feedsReconciled = false;
+	degradedBannerPrompted = false;
+	hideDegradedBanner();
 	currentFeeds = await getAllFeeds();
 	renderFeeds(currentFeeds);
 
