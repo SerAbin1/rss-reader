@@ -10,7 +10,10 @@
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		<title>RSS Reader</title>
-		<meta name="description" content="A quiet, feed-first reading list." />
+		<meta
+			name="description"
+			content="A quiet, feed-first reading list. Subscribe to RSS feeds, import an OPML file, and optionally sync your read state across devices."
+		/>
 
 		<!--
 			LinkedIn (and other crawlers) need absolute og:image/og:url — a
@@ -19,7 +22,10 @@
 		-->
 		<meta property="og:type" content="website" />
 		<meta property="og:title" content="RSS Reader" />
-		<meta property="og:description" content="A quiet, feed-first reading list." />
+		<meta
+			property="og:description"
+			content="A quiet, feed-first reading list. Subscribe to RSS feeds, import an OPML file, and optionally sync your read state across devices."
+		/>
 		<meta property="og:url" content={new URL(Astro.url.pathname, Astro.site)} />
 		<meta property="og:image" content={new URL('/og-image.png', Astro.site)} />
 		<meta property="og:image:width" content="1200" />
@@ -27,7 +33,10 @@
 
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:title" content="RSS Reader" />
-		<meta name="twitter:description" content="A quiet, feed-first reading list." />
+		<meta
+			name="twitter:description"
+			content="A quiet, feed-first reading list. Subscribe to RSS feeds, import an OPML file, and optionally sync your read state across devices."
+		/>
 		<meta name="twitter:image" content={new URL('/og-image.png', Astro.site)} />
 		<!--
 			is:global, not scoped: most of this app's DOM (#post-list/#feed-list
