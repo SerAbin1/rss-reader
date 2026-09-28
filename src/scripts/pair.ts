@@ -1,5 +1,11 @@
 import { setDeviceToken } from "../lib/db";
+import { registerServiceWorker } from "../lib/pwa";
 import { claimPairCode } from "../lib/sync-client";
+
+// A phone that opens /pair straight from the QR code is often its first visit,
+// and an app installed from here needs a worker covering "/" to launch. The
+// registration is idempotent, so this is also on index.astro's script.
+registerServiceWorker();
 
 const form = document.querySelector<HTMLFormElement>("#pair-form")!;
 const codeInput = document.querySelector<HTMLInputElement>("#pair-code-input")!;

@@ -14,6 +14,7 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - Show a unified list of posts across all feeds, sorted earliest first — rendered incrementally as each feed's fetch resolves, not held back until every feed responds
 - Read/unread tracking via a single "last read" watermark (see Architecture) rather than per-post state
 - Basic error handling for feeds that fail to load
+- Installable as an app, and launches to a working (if feedless) shell with no network — see Architecture
 
 ## Goals
 
@@ -35,6 +36,11 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - **Read/unread:** no per-post state. One `lastReadAt` date; a post is read if `publishedAt <= lastReadAt`. Requires reading the (earliest-first) list in order — clicking a post only advances the watermark if it's the very next unread one; clicking further ahead reads just that one post without marking the skipped ones read. Read posts are filtered out of the rendered list entirely, not just styled differently — dynamically-created `<li>` elements can't be targeted by Astro's scoped `<style>` anyway (see Obsidian log). Pure decision logic lives in `src/lib/read-state.ts`, unit-tested separately from the DOM wiring in `src/scripts/app.ts`
 - **Catch-up escape hatch:** a date picker + button lets you jump `lastReadAt` straight to a chosen date (e.g. right after importing an OPML with years of backlog), without changing the normal click-to-advance behavior at all. Excludes the chosen date itself — "everything before this day," not "up to and including it," since a plain date input can't express a time of day
 - **Feed formats supported:** RSS 2.0 and Atom, normalized into one common `Post` shape
+- **PWA:** a hand-written `public/manifest.webmanifest` (readable top-to-bottom, and the single place the installability contract lives) and a service worker at `src/sw.js`, emitted to `dist/sw.js` by an `astro:build:done` integration in `astro.config.mjs`. No PWA plugin: the worker can't know its own precache list at authoring time, because Astro content-hashes the app's script, and the integration that fills the list in is about twenty lines of walking `dist/`
+- **What the worker caches:** the app shell only — both documents, the hashed bundles, the manifest and the icons — under a cache name derived from the *contents* of those files, so any deploy that changes one gets a new cache and the old one is deleted on activate. `index.html` is precached under both `/` and `/index.html` so a navigation is a plain cache hit
+- **What it deliberately doesn't cache:** anything under `/api/`. Feed bodies are meant to be live, and every sync call carries a token — a replayed watermark push or feed change from cache would quietly rewrite the group. `curated-feeds.opml` is served network-first and cached at runtime instead, so a deploy's changes to the feed list land on the next load rather than whenever the cache version changes
+- **Offline, honestly:** the shell opens offline and the status line says "Offline" so the resulting feed failures aren't a mystery. Posts are not cached. Favorites (still a goal) are what will be readable offline
+- **Icons:** generated, not hand-drawn. `scripts/icons/*.svg` are the sources; `scripts/generate-icons.sh` rasterizes them into `public/` (needs `rsvg-convert` and ImageMagick locally). `src/lib/manifest.test.ts` fails if the manifest ever points at an icon that isn't there — which is the bug both pages shipped with for a while
 
 ## Local Development
 
@@ -48,6 +54,10 @@ pnpm test       # run the test suite
 ```
 
 `pnpm dev`/`pnpm preview` don't run Cloudflare Pages Functions — `/api/feed` only exists under `pnpm pages:dev` (Wrangler). Run `pnpm build` again after changing anything under `functions/` or `src/`, then re-run `pnpm pages:dev` to pick it up.
+
+The service worker is deliberately *not* registered under `pnpm dev` (Astro serves unbundled modules there, and a worker caching them would hand back stale code) — so to exercise it, `pnpm build` and then `pnpm pages:dev`, which serves the same `dist/` that gets deployed. Register the worker before checking it offline: a first visit installs it, and DevTools → Application → Service Workers shows it, along with the "Offline" checkbox that proves the shell launches with no network. Installability is visible in `chrome://web-app-internals` rather than a Lighthouse score — Lighthouse dropped its PWA category.
+
+After editing anything under `scripts/icons/`, run `bash scripts/generate-icons.sh` and commit the regenerated files in `public/`.
 
 ## Deployment
 

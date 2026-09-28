@@ -11,6 +11,7 @@ import {
 } from "../lib/db";
 import { parseFeed, type ParsedFeed, type Post } from "../lib/feed-parser";
 import { parseOpml } from "../lib/opml";
+import { isOnline, onConnectivityChange, registerServiceWorker } from "../lib/pwa";
 import {
 	pullFeeds,
 	pullWatermark,
@@ -56,6 +57,19 @@ const pairingExpiryEl =
 	document.querySelector<HTMLParagraphElement>("#pairing-expiry")!;
 const pairingDoneButton =
 	document.querySelector<HTMLButtonElement>("#pairing-done")!;
+
+// Registers the installed app's service worker (a no-op in dev — see lib/pwa).
+// /pair's script registers the same worker, so a first visit that lands there
+// from a scanned QR still ends up with a worker covering "/".
+registerServiceWorker();
+
+// Re-rendered on every connectivity change: the feed failures below say what
+// happened, and "Offline" says why, which is the part a user can't infer.
+let online = isOnline();
+onConnectivityChange((next) => {
+	online = next;
+	updateLoadStatus();
+});
 
 // Module state so a click handler (see markReadIfNext below) can re-render
 // without refetching every feed.
@@ -382,7 +396,11 @@ function updateLoadStatus(): void {
 	const loadedSummary = `${unreadCount} unread of ${currentPosts.length} loaded`;
 	const progress = settledFeeds < totalFeeds ? ` (${settledFeeds}/${totalFeeds} feeds)` : "";
 	const failureNote = failures > 0 ? ` ${failures} feed(s) failed to load — see console.` : "";
-	postsStatusEl.textContent = `${loadedSummary}.${progress}${failureNote}`;
+	// Leads, because offline is the reason most or all of those failures
+	// happened, and a row of "feed(s) failed" on its own reads like a broken
+	// app rather than a phone in a tunnel.
+	const offlineNote = online ? "" : "Offline — ";
+	postsStatusEl.textContent = `${offlineNote}${loadedSummary}.${progress}${failureNote}`;
 }
 
 // Renders each feed's posts as soon as that one feed resolves, merged into the

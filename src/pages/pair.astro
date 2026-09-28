@@ -1,5 +1,5 @@
 ---
-
+import PwaHead from "../components/PwaHead.astro";
 ---
 
 <html lang="en">
@@ -7,7 +7,7 @@
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
+		<PwaHead />
 		<meta name="generator" content={Astro.generator} />
 		<title>Pair device — RSS Reader</title>
 		<style is:global>
@@ -39,15 +39,20 @@
 				background: var(--bg);
 			}
 
-			body {
-				background: var(--bg);
-				color: var(--fg);
-				font-family: var(--font-sans);
-				line-height: 1.5;
-				max-width: 24rem;
-				margin: 0 auto;
-				padding: 3rem 1.5rem 5rem;
-			}
+		body {
+			background: var(--bg);
+			color: var(--fg);
+			font-family: var(--font-sans);
+			line-height: 1.5;
+			max-width: 24rem;
+			margin: 0 auto;
+			/* See index.astro: per-side so the safe-area insets add to the
+			   padding rather than clip the content once installed. */
+			padding-top: calc(3rem + env(safe-area-inset-top));
+			padding-right: max(1.5rem, env(safe-area-inset-right));
+			padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+			padding-left: max(1.5rem, env(safe-area-inset-left));
+		}
 
 			h1 {
 				font-size: 1.1rem;

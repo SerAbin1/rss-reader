@@ -1,0 +1,18 @@
+<!--
+	Source for public/favicon.svg (and, rasterized down, public/favicon.ico).
+
+	Transparent so the browser tab's own background shows through, and drawn
+	tighter than the app icons: a favicon is rendered at 16px, where the
+	generous margins that make an app icon look right are just empty space.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+	<text
+		x="32"
+		y="45"
+		fill="#22201c"
+		font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'URW Palladio L', Georgia, serif"
+		font-size="34"
+		font-style="italic"
+		letter-spacing="-1"
+		text-anchor="middle">RSS</text>
+</svg>

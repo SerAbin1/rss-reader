@@ -1,5 +1,5 @@
 ---
-
+import PwaHead from "../components/PwaHead.astro";
 ---
 
 <html lang="en">
@@ -7,7 +7,7 @@
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
+		<PwaHead />
 		<meta name="generator" content={Astro.generator} />
 		<title>RSS Reader</title>
 		<meta
@@ -74,15 +74,26 @@
 				background: var(--bg);
 			}
 
-			body {
-				background: var(--bg);
-				color: var(--fg);
-				font-family: var(--font-sans);
-				line-height: 1.5;
-				max-width: 40rem;
-				margin: 0 auto;
-				padding: 3rem 1.5rem 5rem;
-			}
+		body {
+			background: var(--bg);
+			color: var(--fg);
+			font-family: var(--font-sans);
+			line-height: 1.5;
+			max-width: 40rem;
+			margin: 0 auto;
+			/*
+				Per-side so the safe-area insets can be added to the padding that
+				was already there. In a browser tab every inset is 0 and this is
+				unchanged; installed on a phone, the notch and the home indicator
+				eat into the padding instead of over the content — the bottom
+				inset most, where the last post in the list would otherwise be
+				half-hidden behind the gesture bar.
+			*/
+			padding-top: calc(3rem + env(safe-area-inset-top));
+			padding-right: max(1.5rem, env(safe-area-inset-right));
+			padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+			padding-left: max(1.5rem, env(safe-area-inset-left));
+		}
 
 			a {
 				color: inherit;

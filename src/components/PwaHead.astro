@@ -1,0 +1,46 @@
+---
+// What both pages need to be installable, and to look like an installed app
+// rather than a web page in a frame.
+//
+// One component instead of two copies of these tags: /pair is a real page that
+// a phone can land on first (it's what the QR code points at), and a manifest
+// link that only exists on the posts page means an app installed from there has
+// no manifest to register against.
+---
+
+<!--
+	viewport-fit=cover lets the page paint under the notch and gesture bar; the
+	safe-area insets in each page's body padding are what keep content out from
+	under them.
+-->
+<meta
+	name="viewport"
+	content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
+
+<link rel="manifest" href="/manifest.webmanifest" />
+
+<!--
+	theme-color paints the browser and OS chrome above the page. Declared once
+	per color scheme so the strip matches the page's own --bg rather than
+	showing cream above a dark reader. The app itself is a single stylesheet
+	driven by prefers-color-scheme, so this is the only place that has to spell
+	out both.
+-->
+<meta
+	name="theme-color"
+	content="#faf8f4"
+	media="(prefers-color-scheme: light)"
+/>
+<meta
+	name="theme-color"
+	content="#18160f"
+	media="(prefers-color-scheme: dark)"
+/>
+
+<!--
+	So the UA renders its own surfaces (scrollbars, form controls, the canvas
+	behind a page pulled short of the viewport) in the same scheme, instead of
+	defaulting to light.
+-->
+<meta name="color-scheme" content="light dark" />

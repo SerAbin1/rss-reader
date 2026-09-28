@@ -1,2 +1,11 @@
 /curated-feeds.opml
   Cache-Control: no-cache
+
+# The worker is the one file a browser fetches outside its own cache-management
+# rules, and it holds the precache list — so a deploy's new worker has to be
+# picked up, not served from the last one it saw.
+#
+# The MIME type isn't set here: Cloudflare Pages already serves .webmanifest as
+# application/manifest+json, which is what installability requires.
+/sw.js
+  Cache-Control: no-cache

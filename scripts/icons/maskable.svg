@@ -1,0 +1,21 @@
+<!--
+	Source for public/icon-maskable-512.png.
+
+	Maskable icons get cropped to whatever shape the launcher uses (circle,
+	squircle, rounded square), which can clip up to 20% off every side, so the
+	wordmark here sits well inside the central 80% safe zone rather than filling
+	the canvas the way any.svg does. Background must be opaque: a maskable icon
+	whose transparent parts get cut away shows whatever is behind it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+	<rect width="512" height="512" fill="#faf8f4" />
+	<text
+		x="258"
+		y="313"
+		fill="#22201c"
+		font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'URW Palladio L', Georgia, serif"
+		font-size="165"
+		font-style="italic"
+		letter-spacing="-4"
+		text-anchor="middle">RSS</text>
+</svg>
