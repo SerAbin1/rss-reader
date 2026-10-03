@@ -135,22 +135,80 @@ import PwaHead from "../components/PwaHead.astro";
 				margin: 0 0 1.25rem;
 			}
 
-			.catch-up {
-				display: flex;
-				align-items: center;
-				flex-wrap: wrap;
-				gap: 0.5rem;
+			/*
+				Sits directly under the status line and reads as its continuation:
+				the failure count is the summary, the list of failed feeds is what
+				it expands into.
+			*/
+			.feed-errors {
 				font-size: 0.8rem;
 				color: var(--muted);
-				margin-bottom: 2.25rem;
+				margin: -0.75rem 0 1.25rem;
 			}
 
-			.catch-up label {
-				white-space: nowrap;
+			.feed-errors summary {
+				cursor: pointer;
+				width: fit-content;
 			}
 
-			.catch-up input,
-			.catch-up button,
+			#feed-error-list {
+				margin-top: 0.5rem;
+				padding: 0.25rem 0.75rem;
+				background: var(--control-bg);
+				border: 1px solid var(--border);
+				border-radius: 4px;
+			}
+
+			#feed-error-list li {
+				display: flex;
+				flex-wrap: wrap;
+				align-items: baseline;
+				gap: 0.25rem 0.75rem;
+				padding: 0.5rem 0;
+			}
+
+			#feed-error-list li + li {
+				border-top: 1px solid var(--border);
+			}
+
+			.feed-error-name {
+				color: var(--fg);
+			}
+
+			.feed-error-reason {
+				flex: 1 1 10rem;
+			}
+
+			.feed-error-actions {
+				display: flex;
+				align-items: baseline;
+				gap: 0.5rem;
+			}
+
+			.feed-error-actions button {
+				font: inherit;
+				color: var(--fg);
+				background: var(--bg);
+				border: 1px solid var(--border);
+				border-radius: 3px;
+				padding: 0.15rem 0.5rem;
+				cursor: pointer;
+			}
+
+			.feed-error-actions button:hover {
+				border-color: var(--muted);
+			}
+
+			.feed-error-actions button:disabled {
+				cursor: default;
+				opacity: 0.6;
+			}
+
+			.feed-error-note {
+				cursor: help;
+				text-decoration: underline dotted;
+			}
+
 			.add-feed input,
 			.add-feed button {
 				font: inherit;
@@ -161,21 +219,18 @@ import PwaHead from "../components/PwaHead.astro";
 				padding: 0.3rem 0.5rem;
 			}
 
-			.catch-up button,
 			.add-feed button {
 				cursor: pointer;
 			}
 
-			.catch-up button:hover,
 			.add-feed button:hover {
 				border-color: var(--muted);
 			}
 
 			/*
-				The shared selector lists above already give this row .catch-up's
-				control styling. The URL field takes the slack in what's left:
-				a text box at its content width is the one shape a long feed
-				URL can't be read in on a phone.
+				The URL field takes the slack in what's left: a text box at its
+				content width is the one shape a long feed URL can't be read in
+				on a phone.
 			*/
 			.add-feed {
 				display: flex;
@@ -202,8 +257,53 @@ import PwaHead from "../components/PwaHead.astro";
 			}
 
 			#post-list li {
+				display: flex;
+				align-items: flex-start;
+				gap: 0.75rem;
 				padding: 1rem 0;
 				border-bottom: 1px solid var(--border);
+			}
+
+			.post-body {
+				flex: 1;
+				/* Lets a long unbroken title wrap instead of pushing ✓ off-screen. */
+				min-width: 0;
+				overflow-wrap: anywhere;
+			}
+
+			/*
+				Always visible on touch, where there's no hover to reveal it; on a
+				pointer it stays out of the way until the row is hovered or the
+				button is reached by keyboard.
+			*/
+			.mark-read {
+				flex-shrink: 0;
+				font: inherit;
+				font-size: 0.85rem;
+				line-height: 1;
+				color: var(--muted);
+				background: none;
+				border: 1px solid var(--border);
+				border-radius: 50%;
+				width: 1.9rem;
+				height: 1.9rem;
+				cursor: pointer;
+			}
+
+			.mark-read:hover {
+				color: var(--fg);
+				border-color: var(--muted);
+			}
+
+			@media (hover: hover) {
+				.mark-read {
+					opacity: 0;
+				}
+
+				#post-list li:hover .mark-read,
+				.mark-read:focus-visible {
+					opacity: 1;
+				}
 			}
 
 			#post-list li:first-child {
@@ -271,6 +371,15 @@ import PwaHead from "../components/PwaHead.astro";
 
 			#feed-list a:hover {
 				text-decoration: underline;
+			}
+
+			#feed-list li.failed {
+				opacity: 0.6;
+				cursor: help;
+			}
+
+			.failed-mark {
+				margin-right: 0.25rem;
 			}
 
 			.import-opml {
@@ -430,6 +539,11 @@ import PwaHead from "../components/PwaHead.astro";
 		<!-- Main content: posts from all subscribed feeds. -->
 		<main>
 			<p id="posts-status"></p>
+			<!-- Filled and shown by app.ts's renderFeedErrors when a feed fails. -->
+			<details id="feed-errors" class="feed-errors" hidden>
+				<summary id="feed-errors-summary"></summary>
+				<ul id="feed-error-list"></ul>
+			</details>
 			<!--
 				Degraded-load consent banner. Appears at most once per load, only
 				when some feed failed and the local watermark would otherwise sit
@@ -441,17 +555,6 @@ import PwaHead from "../components/PwaHead.astro";
 					<button id="sync-banner-push" type="button">Push anyway</button>
 					<button id="sync-banner-dismiss" type="button">Keep local</button>
 				</div>
-			</div>
-			<!--
-				One-time escape hatch for a backlog you have no intention of reading
-				through in order (e.g. right after importing an OPML with years of
-				history). Sets the watermark to a date you pick — does not change
-				the normal click-to-advance behavior at all.
-			-->
-			<div class="catch-up">
-				<label for="catch-up-date">Mark everything read before</label>
-				<input type="date" id="catch-up-date" />
-				<button id="catch-up-button" type="button">Catch up</button>
 			</div>
 			<ul id="post-list"></ul>
 		</main>

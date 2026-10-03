@@ -30,17 +30,17 @@ export function watermarkAfterClick(
 	return posts[clickedIndex].publishedAt;
 }
 
-// Catch-up is forward-only. Moving the watermark backwards is the one
-// non-monotonic write this app could otherwise produce, and it stops being
-// harmless once reading state syncs: the server merges with max(), so a rewind
-// would be discarded server-side, linger locally until the next load, then
-// silently vanish — indistinguishable from a bug. Catch-up exists to skip a
-// backlog, which is always forward, so rejecting a backwards jump costs
-// nothing real. Returns the new lastReadAt, or null if it wouldn't advance.
-export function watermarkAfterCatchUp(
+// "Mark read up to here" is forward-only. Moving the watermark backwards is
+// the one non-monotonic write this app could otherwise produce, and it stops
+// being harmless once reading state syncs: the server merges with max(), so a
+// rewind would be discarded server-side, linger locally until the next load,
+// then silently vanish — indistinguishable from a bug. Marking exists to skip
+// ahead, which is always forward, so rejecting a backwards jump costs nothing
+// real. Returns the new lastReadAt, or null if it wouldn't advance.
+export function watermarkAfterMarkUpTo(
 	lastReadAt: string | null,
-	cutoff: string,
+	publishedAt: string,
 ): string | null {
-	if (lastReadAt !== null && cutoff <= lastReadAt) return null;
-	return cutoff;
+	if (lastReadAt !== null && publishedAt <= lastReadAt) return null;
+	return publishedAt;
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	findFirstUnreadIndex,
 	isRead,
-	watermarkAfterCatchUp,
+	watermarkAfterMarkUpTo,
 	watermarkAfterClick,
 } from "./read-state";
 
@@ -59,13 +59,13 @@ describe("watermarkAfterClick", () => {
 	});
 });
 
-describe("watermarkAfterCatchUp", () => {
-	it("advances the watermark to the chosen cutoff", () => {
-		expect(watermarkAfterCatchUp(null, posts[1].publishedAt)).toBe(
+describe("watermarkAfterMarkUpTo", () => {
+	it("advances the watermark to the marked post", () => {
+		expect(watermarkAfterMarkUpTo(null, posts[1].publishedAt)).toBe(
 			posts[1].publishedAt,
 		);
 		expect(
-			watermarkAfterCatchUp(posts[0].publishedAt, posts[2].publishedAt),
+			watermarkAfterMarkUpTo(posts[0].publishedAt, posts[2].publishedAt),
 		).toBe(posts[2].publishedAt);
 	});
 
@@ -73,13 +73,13 @@ describe("watermarkAfterCatchUp", () => {
 		// Forward-only: a rewind is the one non-monotonic write this app could
 		// produce, and sync's max() merge would silently discard it.
 		expect(
-			watermarkAfterCatchUp(posts[2].publishedAt, posts[0].publishedAt),
+			watermarkAfterMarkUpTo(posts[2].publishedAt, posts[0].publishedAt),
 		).toBeNull();
 	});
 
-	it("refuses a cutoff equal to the current watermark", () => {
+	it("refuses a post dated exactly at the current watermark", () => {
 		expect(
-			watermarkAfterCatchUp(posts[1].publishedAt, posts[1].publishedAt),
+			watermarkAfterMarkUpTo(posts[1].publishedAt, posts[1].publishedAt),
 		).toBeNull();
 	});
 });

@@ -13,7 +13,8 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - On each visit, fetch the latest items from every subscribed feed
 - Show a unified list of posts across all feeds, sorted earliest first — rendered incrementally as each feed's fetch resolves, not held back until every feed responds
 - Read/unread tracking via a single "last read" watermark (see Architecture) rather than per-post state
-- Basic error handling for feeds that fail to load
+- Failed feeds are marked in the feed list (reason on hover) and listed under the status line, each with a Retry — and, for your own feeds, a Remove
+- Unread count in the tab title and, when installed, on the app icon badge
 - Installable as an app, and launches to a working (if feedless) shell with no network — see Architecture
 
 ## Goals
@@ -22,7 +23,6 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - Export current subscriptions back to OPML
 - Group feeds into folders/categories
 - Search/filter posts
-- Per-feed refresh/error status indicators
 - Dark mode
 - Optional account + server-side storage to sync across devices
 
@@ -36,7 +36,7 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - **Persistence:** browser `IndexedDB` — the personal subscription list and a single `lastReadAt` watermark. No backend database or user accounts in the MVP. Used via the raw `IndexedDB` API first (educational), then wrapped in a small hand-rolled abstraction once the raw usage gets repetitive
 - **Curated feed list:** `public/curated-feeds.opml`, a git-versioned file shipped as-is with every deploy — identical for every visitor, fetched fresh each load, never written to IndexedDB or synced. Adding a feed for everyone means editing this file and deploying; there's no in-app or API path that can change it, so no separate admin auth was needed
 - **Read/unread:** no per-post state. One `lastReadAt` date; a post is read if `publishedAt <= lastReadAt`. Requires reading the (earliest-first) list in order — clicking a post only advances the watermark if it's the very next unread one; clicking further ahead reads just that one post without marking the skipped ones read. Read posts are filtered out of the rendered list entirely, not just styled differently — dynamically-created `<li>` elements can't be targeted by Astro's scoped `<style>` anyway (see Obsidian log). Pure decision logic lives in `src/lib/read-state.ts`, unit-tested separately from the DOM wiring in `src/scripts/app.ts`
-- **Catch-up escape hatch:** a date picker + button lets you jump `lastReadAt` straight to a chosen date (e.g. right after importing an OPML with years of backlog), without changing the normal click-to-advance behavior at all. Excludes the chosen date itself — "everything before this day," not "up to and including it," since a plain date input can't express a time of day
+- **Mark read up to here:** a ✓ on each post (revealed on hover with a pointer, always shown on touch) sets `lastReadAt` to that post's date, so a backlog you don't intend to read in order can be skipped from wherever you are. Forward-only, and asks first when it marks more than the one post, since a marked post can't be brought back once the watermark syncs
 - **Feed formats supported:** RSS 2.0 and Atom, normalized into one common `Post` shape
 - **PWA:** a hand-written `public/manifest.webmanifest` (readable top-to-bottom, and the single place the installability contract lives) and a service worker at `src/sw.js`, emitted to `dist/sw.js` by an `astro:build:done` integration in `astro.config.mjs`. No PWA plugin: the worker can't know its own precache list at authoring time, because Astro content-hashes the app's script, and the integration that fills the list in is about twenty lines of walking `dist/`
 - **What the worker caches:** the app shell only — both documents, the hashed bundles, the manifest and the icons — under a cache name derived from the *contents* of those files, so any deploy that changes one gets a new cache and the old one is deleted on activate. `index.html` is precached under both `/` and `/index.html` so a navigation is a plain cache hit

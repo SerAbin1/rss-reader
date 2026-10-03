@@ -23,9 +23,10 @@ import {
 import { formatPairCode, mergeWatermark } from "../lib/sync-state";
 import {
 	isRead,
-	watermarkAfterCatchUp,
 	watermarkAfterClick,
+	watermarkAfterMarkUpTo,
 } from "../lib/read-state";
+import { formatFullDate, formatPostDate } from "../lib/relative-date";
 
 const fileInput = document.querySelector<HTMLInputElement>("#opml-input")!;
 const addFeedForm = document.querySelector<HTMLFormElement>("#add-feed-form")!;
@@ -37,10 +38,12 @@ const postListEl = document.querySelector<HTMLUListElement>("#post-list")!;
 const statusEl = document.querySelector<HTMLParagraphElement>("#status")!;
 const postsStatusEl =
 	document.querySelector<HTMLParagraphElement>("#posts-status")!;
-const catchUpDateInput =
-	document.querySelector<HTMLInputElement>("#catch-up-date")!;
-const catchUpButton =
-	document.querySelector<HTMLButtonElement>("#catch-up-button")!;
+const feedErrorsEl =
+	document.querySelector<HTMLDetailsElement>("#feed-errors")!;
+const feedErrorsSummaryEl =
+	document.querySelector<HTMLElement>("#feed-errors-summary")!;
+const feedErrorListEl =
+	document.querySelector<HTMLUListElement>("#feed-error-list")!;
 const syncBannerEl = document.querySelector<HTMLDivElement>("#sync-banner")!;
 const syncBannerMessageEl =
 	document.querySelector<HTMLParagraphElement>("#sync-banner-message")!;
@@ -91,7 +94,9 @@ let lastReadAt: string | null = null;
 // failure count rather than a provisional one.
 let totalFeeds = 0;
 let settledFeeds = 0;
-let failures = 0;
+// Every feed that failed this load, by URL, with the reason shown to the user.
+// Its size is the failure count; a retry or removal takes an entry out.
+let feedErrors = new Map<string, string>();
 
 // Null means this device never opted into sync; it then never touches the
 // network and behaves exactly as before.
@@ -109,13 +114,30 @@ let feedsReconciled = false;
 // silently re-decide it — after the user already dismissed it once.
 let degradedBannerPrompted = false;
 
+// Whether the watermark advanced while some feed was failing. A retry that
+// brings every feed back only gets to push on its own if this is false: a
+// watermark moved against a view with feeds missing may already sit past
+// posts that were never shown, which is the banner's question to ask.
+let readWhileDegraded = false;
+
 function renderFeeds(feeds: Feed[]): void {
 	feedListEl.replaceChildren(
 		...feeds.map((feed) => {
 			const li = document.createElement("li");
+			const error = feedErrors.get(feed.feedUrl);
+			if (error !== undefined) {
+				li.className = "failed";
+				li.title = `Failed to load: ${error}`;
+				const mark = document.createElement("span");
+				mark.className = "failed-mark";
+				mark.textContent = "⚠";
+				mark.setAttribute("aria-label", "Failed to load:");
+				li.append(mark);
+			}
+
 			// Plain text until the feed's homepage is known — see rememberSiteUrl.
 			if (feed.siteUrl === undefined) {
-				li.textContent = feed.title;
+				li.append(feed.title);
 				return li;
 			}
 
@@ -169,6 +191,7 @@ function renderPosts(): void {
 		.map((post, index) => ({ post, index }))
 		.filter(({ post }) => !isRead(post.publishedAt, lastReadAt));
 
+	const now = new Date();
 	postListEl.replaceChildren(
 		...unread.map(({ post, index }) => {
 			const li = document.createElement("li");
@@ -192,22 +215,38 @@ function renderPosts(): void {
 			feedName.className = "feed-name";
 			feedName.textContent = currentFeedTitleByUrl.get(post.feedUrl) ?? post.feedUrl;
 
-			const date = document.createElement("span");
+			// The exact date stays one hover away once the label goes relative.
+			const date = document.createElement("time");
 			date.className = "date";
-			date.textContent = new Date(post.publishedAt).toLocaleDateString(undefined, {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-			});
+			date.dateTime = post.publishedAt;
+			date.title = formatFullDate(new Date(post.publishedAt));
+			date.textContent = formatPostDate(post.publishedAt, now);
 
 			meta.append(feedName, date);
-			li.append(link, meta);
+
+			const body = document.createElement("div");
+			body.className = "post-body";
+			body.append(link, meta);
+
+			const markButton = document.createElement("button");
+			markButton.type = "button";
+			markButton.className = "mark-read";
+			markButton.textContent = "✓";
+			markButton.title = "Mark read up to here";
+			markButton.setAttribute("aria-label", `Mark read up to "${post.title}"`);
+			markButton.addEventListener("click", () => {
+				void markReadUpTo(post);
+			});
+
+			li.append(body, markButton);
 			return li;
 		}),
 	);
+	updateLoadStatus();
 }
 
 async function markRead(publishedAt: string): Promise<void> {
+	if (feedErrors.size > 0) readWhileDegraded = true;
 	lastReadAt = publishedAt;
 	await setLastReadAt(publishedAt);
 	renderPosts();
@@ -227,7 +266,7 @@ async function pushWatermarkIfAllowed(): Promise<void> {
 	// would make that watermark authoritative on a device where those feeds
 	// loaded fine, marking posts read that were never shown anywhere. Ask
 	// first, via the banner, rather than silently refusing or silently pushing.
-	if (failures > 0) {
+	if (feedErrors.size > 0) {
 		showDegradedBanner();
 		return;
 	}
@@ -256,6 +295,7 @@ function showDegradedBanner(): void {
 	if (degradedBannerPrompted) return;
 	degradedBannerPrompted = true;
 
+	const failures = feedErrors.size;
 	syncBannerMessageEl.textContent =
 		`${failures} feed${failures === 1 ? "" : "s"} failed to load, so this ` +
 		"device's reading position wasn't sent to your other devices. It's " +
@@ -352,46 +392,51 @@ function applyWatermark(next: string | null): void {
 	renderPosts();
 }
 
-// One-time escape hatch: jumps the watermark straight to a date you pick, so
-// a backlog you have no intention of reading in order (e.g. right after
-// importing an OPML with years of history) doesn't have to be clicked through
-// one by one. Excludes the chosen date itself (see cutoff below) — a plain
-// date input can't express a time of day, so "before the chosen day" is the
-// only unambiguous reading. Doesn't change the normal click-to-advance
-// behavior above.
-catchUpButton.addEventListener("click", async () => {
-	const dateValue = catchUpDateInput.value;
-	if (!dateValue) {
-		alert("Pick a date first.");
-		return;
-	}
+// Replaces click-to-advance's one-post-at-a-time rule when you mean to skip:
+// everything up to and including this post is marked read, whether or not it
+// was opened. Asks first only when that skips more than the one post, since a
+// marked post can't be brought back — the watermark is forward-only and, once
+// synced, max()-merged on every device.
+async function markReadUpTo(post: Post): Promise<void> {
+	const next = watermarkAfterMarkUpTo(lastReadAt, post.publishedAt);
+	if (next === null) return;
 
-	// The instant *before* the chosen day starts, so the chosen date itself
-	// stays unread — "up to but not including" rather than "up to and including".
-	const cutoff = new Date(
-		new Date(`${dateValue}T00:00:00.000Z`).getTime() - 1,
-	).toISOString();
-	// Forward-only. Catching up to a date already behind the watermark would
-	// move it backwards — harmless locally, but it's the one non-monotonic
-	// write this app can produce, and once reading state syncs the server's
-	// max() merge discards it: the rewind would survive until the next load
-	// and then silently undo itself. Rejected outright instead.
-	if (watermarkAfterCatchUp(lastReadAt, cutoff) === null) {
-		alert(`Everything before ${dateValue} is already marked read.`);
-		return;
-	}
+	const marked = currentPosts.filter(
+		(candidate) =>
+			!isRead(candidate.publishedAt, lastReadAt) &&
+			isRead(candidate.publishedAt, next),
+	).length;
+	if (marked > 1 && !confirm(`Mark ${marked} posts as read?`)) return;
 
-	if (!confirm(`Mark everything before ${dateValue} as read?`)) return;
-
-	await markRead(cutoff);
-});
+	await markRead(next);
+}
 
 async function fetchPosts(feed: Feed): Promise<ParsedFeed> {
 	const res = await fetch(`/api/feed?url=${encodeURIComponent(feed.feedUrl)}`);
 	if (!res.ok) {
-		throw new Error(`${feed.title}: request failed (${res.status})`);
+		throw new Error(await proxyErrorMessage(res));
 	}
 	return parseFeed(await res.text(), feed.feedUrl);
+}
+
+// /api/feed explains its failures in a JSON body ("Feed responded with 404."),
+// which says far more than the proxy's own status, always 400 or 502.
+async function proxyErrorMessage(res: Response): Promise<string> {
+	try {
+		const body = (await res.json()) as { error?: unknown };
+		if (typeof body.error === "string") return body.error;
+	} catch {
+		// Not JSON, e.g. a platform error page — fall through to the status.
+	}
+	return `Request failed (${res.status}).`;
+}
+
+// What a failed feed shows the user. A fetch that never got a response is a
+// TypeError with a browser-specific message ("Failed to fetch", "Load
+// failed"), so it's named here instead.
+function describeFeedError(err: unknown): string {
+	if (err instanceof TypeError) return "Couldn't reach the server.";
+	return err instanceof Error ? err.message : String(err);
 }
 
 function updateLoadStatus(): void {
@@ -400,12 +445,148 @@ function updateLoadStatus(): void {
 	).length;
 	const loadedSummary = `${unreadCount} unread of ${currentPosts.length} loaded`;
 	const progress = settledFeeds < totalFeeds ? ` (${settledFeeds}/${totalFeeds} feeds)` : "";
-	const failureNote = failures > 0 ? ` ${failures} feed(s) failed to load — see console.` : "";
 	// Leads, because offline is the reason most or all of those failures
 	// happened, and a row of "feed(s) failed" on its own reads like a broken
 	// app rather than a phone in a tunnel.
 	const offlineNote = online ? "" : "Offline — ";
-	postsStatusEl.textContent = `${offlineNote}${loadedSummary}.${progress}${failureNote}`;
+	postsStatusEl.textContent = `${offlineNote}${loadedSummary}.${progress}`;
+	showUnreadCount(unreadCount);
+}
+
+// The tab title, and the icon badge when installed — so the count is visible
+// without switching to the app. setAppBadge is absent outside installed PWAs
+// on some browsers, and rejects rather than throws when it can't badge.
+function showUnreadCount(count: number): void {
+	document.title = count > 0 ? `(${count}) RSS Reader` : "RSS Reader";
+	if ("setAppBadge" in navigator) {
+		const update = count > 0 ? navigator.setAppBadge(count) : navigator.clearAppBadge();
+		update.catch(() => {});
+	}
+}
+
+// The failure count, expandable into the list of failed feeds with a way to
+// retry each — and, for a feed of your own, to unsubscribe from one that keeps
+// failing. Curated feeds can't be removed here: they ship with the build, so
+// dropping one is an edit to curated-feeds.opml.
+function renderFeedErrors(): void {
+	const failures = feedErrors.size;
+	feedErrorsEl.hidden = failures === 0;
+	if (failures === 0) {
+		feedErrorsEl.open = false;
+		feedErrorListEl.replaceChildren();
+		return;
+	}
+
+	feedErrorsSummaryEl.textContent = `${failures} feed${failures === 1 ? "" : "s"} failed to load`;
+	const curated = curatedUrls();
+	const failed = [...curatedFeeds, ...currentFeeds].filter((feed) =>
+		feedErrors.has(feed.feedUrl),
+	);
+
+	feedErrorListEl.replaceChildren(
+		...failed.map((feed) => {
+			const li = document.createElement("li");
+
+			const name = document.createElement("span");
+			name.className = "feed-error-name";
+			name.textContent = feed.title;
+
+			const reason = document.createElement("span");
+			reason.className = "feed-error-reason";
+			reason.textContent = feedErrors.get(feed.feedUrl) ?? "";
+
+			const actions = document.createElement("span");
+			actions.className = "feed-error-actions";
+
+			const retryButton = document.createElement("button");
+			retryButton.type = "button";
+			retryButton.textContent = "Retry";
+			retryButton.addEventListener("click", () => {
+				retryButton.disabled = true;
+				retryButton.textContent = "Retrying…";
+				void retryFeed(feed);
+			});
+			actions.append(retryButton);
+
+			if (curated.has(feed.feedUrl)) {
+				const note = document.createElement("span");
+				note.className = "feed-error-note";
+				note.textContent = "Curated";
+				note.title = "Ships with the site — remove it from curated-feeds.opml";
+				actions.append(note);
+			} else {
+				const removeButton = document.createElement("button");
+				removeButton.type = "button";
+				removeButton.textContent = "Remove";
+				removeButton.addEventListener("click", () => {
+					void removeFeed(feed);
+				});
+				actions.append(removeButton);
+			}
+
+			li.append(name, reason, actions);
+			return li;
+		}),
+	);
+}
+
+// Re-renders everything a change in feedErrors shows up in.
+function feedErrorsChanged(): void {
+	renderFeedErrors();
+	renderAllFeeds();
+	updateLoadStatus();
+}
+
+// The failed feed has no posts in the list, so a success just merges them in
+// like any late arrival. When that clears the last failure the load is no
+// longer degraded, and the watermark push it was holding back can go — unless
+// you read while it was degraded, which stays the banner's question.
+async function retryFeed(feed: Feed): Promise<void> {
+	try {
+		const { siteUrl, posts } = await fetchPosts(feed);
+		feedErrors.delete(feed.feedUrl);
+		rememberSiteUrl(feed, siteUrl);
+		appendPosts(feed, posts);
+	} catch (err) {
+		console.error(`${feed.title}:`, err);
+		feedErrors.set(feed.feedUrl, describeFeedError(err));
+	}
+	feedErrorsChanged();
+
+	if (feedErrors.size === 0 && !readWhileDegraded) {
+		hideDegradedBanner();
+		void pushWatermarkIfAllowed();
+	}
+}
+
+// Unsubscribes from one of your own feeds. On a synced device the removal goes
+// to the group first, and the local delete only follows once the group has it:
+// there are no local tombstones, so a feed deleted here but still live in the
+// group would be restored by the very next reconcile.
+async function removeFeed(feed: Feed): Promise<void> {
+	if (!confirm(`Unsubscribe from ${feed.title}?`)) return;
+
+	if (syncToken !== null) {
+		try {
+			await pushFeedChanges(syncToken, [], [feed.feedUrl]);
+		} catch (err) {
+			console.error(err);
+			alert(`Couldn't remove ${feed.title} from your synced devices. Try again when you're online.`);
+			return;
+		}
+	}
+	await deleteFeeds([feed.feedUrl]);
+
+	currentFeeds = currentFeeds.filter((existing) => existing.feedUrl !== feed.feedUrl);
+	currentPosts = currentPosts.filter((post) => post.feedUrl !== feed.feedUrl);
+	// It counted towards this load's progress as a settled feed; it no longer
+	// counts at all.
+	if (feedErrors.delete(feed.feedUrl)) {
+		totalFeeds--;
+		settledFeeds--;
+	}
+	renderPosts();
+	feedErrorsChanged();
 }
 
 // Renders each feed's posts as soon as that one feed resolves, merged into the
@@ -416,11 +597,13 @@ async function loadPosts(feeds: Feed[]): Promise<void> {
 	currentFeedTitleByUrl = new Map();
 	totalFeeds = 0;
 	settledFeeds = 0;
-	failures = 0;
+	feedErrors = new Map();
+	renderFeedErrors();
 
 	if (feeds.length === 0) {
 		postListEl.replaceChildren();
 		postsStatusEl.textContent = "No feeds subscribed yet.";
+		showUnreadCount(0);
 		return;
 	}
 
@@ -456,8 +639,10 @@ async function loadInto(feeds: Feed[]): Promise<void> {
 				rememberSiteUrl(feed, siteUrl);
 				appendPosts(feed, posts);
 			} catch (err) {
-				failures++;
-				console.error(err);
+				console.error(`${feed.title}:`, err);
+				feedErrors.set(feed.feedUrl, describeFeedError(err));
+				renderFeedErrors();
+				renderAllFeeds();
 			} finally {
 				settledFeeds++;
 				updateLoadStatus();
@@ -552,6 +737,7 @@ async function refresh(): Promise<void> {
 	updateSyncSetupButton();
 	feedsReconciled = false;
 	degradedBannerPrompted = false;
+	readWhileDegraded = false;
 	hideDegradedBanner();
 
 	currentFeeds = await getAllFeeds();
