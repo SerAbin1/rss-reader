@@ -12,6 +12,7 @@ import {
 import { parseFeed, type ParsedFeed, type Post } from "../lib/feed-parser";
 import { parseOpml } from "../lib/opml";
 import { isOnline, onConnectivityChange, registerServiceWorker } from "../lib/pwa";
+import { describeImport, normalizeFeedUrl, planAdditions } from "../lib/subscriptions";
 import {
 	pullFeeds,
 	pullWatermark,
@@ -27,6 +28,10 @@ import {
 } from "../lib/read-state";
 
 const fileInput = document.querySelector<HTMLInputElement>("#opml-input")!;
+const addFeedForm = document.querySelector<HTMLFormElement>("#add-feed-form")!;
+const feedUrlInput = document.querySelector<HTMLInputElement>("#feed-url")!;
+const addFeedButton =
+	document.querySelector<HTMLButtonElement>("#add-feed-button")!;
 const feedListEl = document.querySelector<HTMLUListElement>("#feed-list")!;
 const postListEl = document.querySelector<HTMLUListElement>("#post-list")!;
 const statusEl = document.querySelector<HTMLParagraphElement>("#status")!;
@@ -424,14 +429,24 @@ async function loadPosts(feeds: Feed[]): Promise<void> {
 	await loadInto(feeds);
 }
 
+// Merges one feed's posts into the running sorted list and re-renders, rather
+// than waiting for every feed (there can be dozens) to finish before showing
+// anything. Shared by the load below and the add-one-feed path, which already
+// has its posts in hand from the fetch that validated the URL. The title is
+// registered here rather than up front, since a post can only exist once the
+// feed it came from has resolved.
+function appendPosts(feed: Feed, posts: Post[]): void {
+	currentFeedTitleByUrl.set(feed.feedUrl, feed.title);
+	currentPosts.push(...posts);
+	currentPosts.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+	renderPosts();
+}
+
 // Loads a batch of feeds into the running list without resetting it, so feeds
 // that arrive late from a sync reconcile merge into the same sorted view that
 // the local ones are already rendering into.
 async function loadInto(feeds: Feed[]): Promise<void> {
 	totalFeeds += feeds.length;
-	for (const feed of feeds) {
-		currentFeedTitleByUrl.set(feed.feedUrl, feed.title);
-	}
 	updateLoadStatus();
 
 	await Promise.allSettled(
@@ -439,9 +454,7 @@ async function loadInto(feeds: Feed[]): Promise<void> {
 			try {
 				const { siteUrl, posts } = await fetchPosts(feed);
 				rememberSiteUrl(feed, siteUrl);
-				currentPosts.push(...posts);
-				currentPosts.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
-				renderPosts();
+				appendPosts(feed, posts);
 			} catch (err) {
 				failures++;
 				console.error(err);
@@ -451,6 +464,20 @@ async function loadInto(feeds: Feed[]): Promise<void> {
 			}
 		}),
 	);
+}
+
+// Adds feeds to the rendered list. The in-memory half of subscribing, shared by
+// both add paths: each caller has already written its feeds to IndexedDB.
+function subscribeLocally(feeds: Feed[]): void {
+	currentFeeds = [...currentFeeds, ...feeds];
+	renderAllFeeds();
+}
+
+// Curated feeds ship with the build and are subscribed to by every visitor, so
+// they count as already-subscribed for both add paths, and their URLs are what
+// reconcileFeeds keys off to keep them out of the sync group.
+function curatedUrls(): Set<string> {
+	return new Set(curatedFeeds.map((feed) => feed.feedUrl));
 }
 
 // Reconciles this device's feed list with the group's. Returns the feeds that
@@ -529,16 +556,16 @@ async function refresh(): Promise<void> {
 
 	currentFeeds = await getAllFeeds();
 	curatedFeeds = await loadCuratedFeeds();
-	const curatedUrls = new Set(curatedFeeds.map((feed) => feed.feedUrl));
+	const curated = curatedUrls();
 
 	// A feed that's curated as of this load but still sits in this device's
 	// personal store predates the curated list — drop the personal copy so it
 	// isn't rendered twice. reconcileFeeds below retracts it from the sync
 	// group too, for any device paired to one.
-	const shadowed = currentFeeds.filter((feed) => curatedUrls.has(feed.feedUrl));
+	const shadowed = currentFeeds.filter((feed) => curated.has(feed.feedUrl));
 	if (shadowed.length > 0) {
 		await deleteFeeds(shadowed.map((feed) => feed.feedUrl));
-		currentFeeds = currentFeeds.filter((feed) => !curatedUrls.has(feed.feedUrl));
+		currentFeeds = currentFeeds.filter((feed) => !curated.has(feed.feedUrl));
 	}
 
 	renderAllFeeds();
@@ -549,7 +576,7 @@ async function refresh(): Promise<void> {
 	// reconcile turns up are loaded straight into the list that is already
 	// rendering — incremental rendering merges late arrivals anyway.
 	const reconciling =
-		syncToken === null ? null : reconcileFeeds(syncToken, curatedUrls).catch((err) => {
+		syncToken === null ? null : reconcileFeeds(syncToken, curated).catch((err) => {
 			console.error(err);
 			return null;
 		});
@@ -581,30 +608,134 @@ async function pullWatermarkIntoLocal(token: string): Promise<void> {
 	}
 }
 
+// One feed, by URL. Returns whether it was subscribed, so the caller knows
+// whether to clear the field — a URL that turned out not to be a feed is worth
+// keeping on screen to edit.
+async function addSingleFeed(rawUrl: string): Promise<boolean> {
+	// The form is type="url" and required, so the browser has already rejected
+	// an empty field and anything it doesn't recognize as a URL at all. What
+	// gets past that is still worth a second look: normalizeFeedUrl is also
+	// what drops a copied-along fragment, and it refuses a scheme /api/feed
+	// can't fetch (ftp:, file:, ...) that the browser considers a valid URL.
+	const feedUrl = normalizeFeedUrl(rawUrl);
+	if (feedUrl === null) {
+		statusEl.textContent =
+			"Enter a full feed URL, starting with http:// or https://.";
+		return false;
+	}
+
+	// Asked before the fetch, not after: re-adding a feed you already have is
+	// the one case where the answer is knowable without the network, and it
+	// should say so immediately.
+	const { added } = planAdditions(
+		[{ feedUrl, title: feedUrl }],
+		[...curatedFeeds, ...currentFeeds],
+	);
+	if (added.length === 0) {
+		statusEl.textContent = "You're already subscribed to that feed.";
+		return false;
+	}
+
+	addFeedButton.disabled = true;
+	try {
+		// Fetched before it's saved, so a URL that isn't a feed is reported
+		// here rather than joining the list and failing on every load from then
+		// on — and so the record is written complete, with the title and
+		// homepage the document declares, instead of waiting for a later load
+		// to fill them in. The same response is reused for the posts below, so
+		// this costs one request, not two.
+		const parsed = await fetchPosts(added[0]);
+		const feed: Feed = {
+			feedUrl,
+			// A hand-typed URL has no label of its own, so the feed's declared
+			// title is the only thing here worth calling it.
+			title: parsed.title ?? feedUrl,
+		};
+		if (parsed.siteUrl !== null) feed.siteUrl = parsed.siteUrl;
+
+		await saveFeeds([feed]);
+		subscribeLocally([feed]);
+		// Not loadInto: its counters and fetch belong to the batch a load
+		// started, and this feed's posts are already in hand. Only the
+		// unread-of-loaded summary is left to update.
+		appendPosts(feed, parsed.posts);
+		updateLoadStatus();
+		statusEl.textContent = `Added ${feed.title}.`;
+		void reconcileAddedFeeds();
+		return true;
+	} catch (err) {
+		console.error(err);
+		// The overwhelmingly common cause is pasting the site's homepage
+		// instead of the feed's own URL, so say that rather than a bare
+		// failure: the detail is in the console, as it is for every other feed
+		// error in this app.
+		statusEl.textContent =
+			"Couldn't read that as a feed. Check the URL points at the feed itself, not the site's homepage.";
+		return false;
+	} finally {
+		addFeedButton.disabled = false;
+	}
+}
+
+// A feed the user just added is a real change, so it goes to the sync group now
+// rather than on this device's next load — otherwise the other devices don't
+// show it until they happen to reload. Reuses the same reconcile a first load
+// runs, and is a no-op when this device never opted into sync.
+async function reconcileAddedFeeds(): Promise<void> {
+	if (syncToken === null) return;
+	try {
+		const arrived = await reconcileFeeds(syncToken, curatedUrls());
+		feedsReconciled = true;
+		if (arrived.length > 0) await loadInto(arrived);
+	} catch (err) {
+		// The feed is saved and rendering either way; the group catches up on
+		// the next load, which reconciles the same way.
+		console.error(err);
+	}
+}
+
 fileInput.addEventListener("change", async () => {
 	const file = fileInput.files?.[0];
 	if (!file) return;
 
 	try {
-		const curatedUrls = new Set(curatedFeeds.map((feed) => feed.feedUrl));
-		// A feed already on the curated list needs no personal copy — it would
-		// only render twice and get retracted again on the next reconcile.
-		const feeds = parseOpml(await file.text()).filter(
-			(feed) => !curatedUrls.has(feed.feedUrl),
+		// Additive by construction — see planAdditions. Re-importing a file the
+		// device already has adds nothing and rewrites nothing, so the siteUrl
+		// a feed's first load discovered survives it. An OPML listing 5 new
+		// feeds against 40 existing ones loads only those 5, rather than
+		// refetching the whole list as a full reload would.
+		const { added, alreadySubscribed, invalid } = planAdditions(
+			parseOpml(await file.text()),
+			[...curatedFeeds, ...currentFeeds],
 		);
-		if (feeds.length === 0) {
-			statusEl.textContent = "No new feeds found in that OPML file.";
+		const summary = describeImport({ added, alreadySubscribed, invalid });
+		if (added.length === 0) {
+			statusEl.textContent = summary;
 			return;
 		}
-		await saveFeeds(feeds);
-		statusEl.textContent = `Imported ${feeds.length} feed(s).`;
-		await refresh();
+
+		await saveFeeds(added);
+		subscribeLocally(added);
+		// Said before the load, not after: loadInto waits for every added feed
+		// to settle, and an import that brought in 48 of them would otherwise
+		// sit silent for as long as the slowest one takes.
+		statusEl.textContent = summary;
+		await loadInto(added);
+		void reconcileAddedFeeds();
 	} catch (err) {
 		console.error(err);
 		statusEl.textContent =
 			err instanceof Error ? err.message : "Failed to import OPML file.";
 	} finally {
 		fileInput.value = "";
+	}
+});
+
+addFeedForm.addEventListener("submit", async (event) => {
+	// The page would otherwise navigate on submit, losing the reader's place.
+	event.preventDefault();
+	if (await addSingleFeed(feedUrlInput.value)) {
+		feedUrlInput.value = "";
 	}
 });
 

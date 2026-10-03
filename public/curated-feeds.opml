@@ -2,7 +2,7 @@
 <opml version="2.0">
   <head>
     <title>Read You</title>
-    <dateCreated>Thu Aug 27 18:46:02 GMT+05:30 2026</dateCreated>
+    <dateCreated>Mon Sep 28 19:58:29 GMT+05:30 2026</dateCreated>
   </head>
   <body>
     <outline text="Default" title="Default">    <outline htmlUrl="https://www.seangoedecke.com/rss.xml" text="seangoedecke.com RSS feed" title="seangoedecke.com RSS feed" xmlUrl="https://www.seangoedecke.com/rss.xml" />
@@ -26,6 +26,8 @@
     <outline htmlUrl="https://andrewkelley.me/rss.xml" text="Andrew Kelley" title="Andrew Kelley" xmlUrl="https://andrewkelley.me/rss.xml" />
     <outline htmlUrl="https://serabin1.github.io/rss.xml" text="Abin Biju's Blog" title="Abin Biju's Blog" xmlUrl="https://serabin1.github.io/rss.xml" />
     <outline htmlUrl="https://lalitm.com/articles/index.xml" text="Lalit Maganti (Articles only)" title="Lalit Maganti (Articles only)" xmlUrl="https://lalitm.com/articles/index.xml" />
+    <outline htmlUrl="https://against-the-grain.blog/rss" text="Against the Grain" title="Against the Grain" xmlUrl="https://against-the-grain.blog/rss" />
+    <outline htmlUrl="https://lovethepenguin.com/rss" text="Love The Penguin" title="Love The Penguin" xmlUrl="https://lovethepenguin.com/rss" />
 </outline>
     <outline text="Dev" title="Dev">    <outline htmlUrl="https://dave.cheney.net/feed" text="Dave Cheney" title="Dave Cheney" xmlUrl="https://dave.cheney.net/feed" />
     <outline htmlUrl="https://blog.acolyer.org/feed/" text="the morning paper" title="the morning paper" xmlUrl="https://blog.acolyer.org/feed/" />
@@ -49,6 +51,7 @@
     <outline htmlUrl="https://blog.sheerluck.dev/rss.xml" text="Mrsheerluck Blog" title="Mrsheerluck Blog" xmlUrl="https://blog.sheerluck.dev/rss.xml" />
     <outline htmlUrl="https://karboosx.net/rss.xml" text="Karboosx" title="Karboosx" xmlUrl="https://karboosx.net/rss.xml" />
     <outline htmlUrl="https://www.allthingsdistributed.com/atom.xml" text="All Things Distributed" title="All Things Distributed" xmlUrl="https://www.allthingsdistributed.com/atom.xml" />
+    <outline htmlUrl="https://blog.cloudflare.com/rss/" text="Cloudflare Blog" title="Cloudflare Blog" xmlUrl="https://blog.cloudflare.com/rss/" />
 </outline>
     <outline text="Social" title="Social">    <outline htmlUrl="https://indconlawphil.wordpress.com/feed/" text="Constitutional Law and Philosophy" title="Constitutional Law and Philosophy" xmlUrl="https://indconlawphil.wordpress.com/feed/" />
     <outline htmlUrl="https://rss.app/feeds/f46lbds3N7IB5u0a.xml" text="Supreme Court Observer - A living archive of the Supreme Court of India." title="Supreme Court Observer - A living archive of the Supreme Court of India." xmlUrl="https://rss.app/feeds/f46lbds3N7IB5u0a.xml" />

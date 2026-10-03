@@ -150,7 +150,9 @@ import PwaHead from "../components/PwaHead.astro";
 			}
 
 			.catch-up input,
-			.catch-up button {
+			.catch-up button,
+			.add-feed input,
+			.add-feed button {
 				font: inherit;
 				color: var(--fg);
 				background: var(--control-bg);
@@ -159,12 +161,44 @@ import PwaHead from "../components/PwaHead.astro";
 				padding: 0.3rem 0.5rem;
 			}
 
-			.catch-up button {
+			.catch-up button,
+			.add-feed button {
 				cursor: pointer;
 			}
 
-			.catch-up button:hover {
+			.catch-up button:hover,
+			.add-feed button:hover {
 				border-color: var(--muted);
+			}
+
+			/*
+				The shared selector lists above already give this row .catch-up's
+				control styling. The URL field takes the slack in what's left:
+				a text box at its content width is the one shape a long feed
+				URL can't be read in on a phone.
+			*/
+			.add-feed {
+				display: flex;
+				align-items: center;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				margin-bottom: 0.75rem;
+			}
+
+			.add-feed label {
+				white-space: nowrap;
+			}
+
+			.add-feed input[type="url"] {
+				flex: 1 1 14rem;
+				/* Without this a long URL refuses to shrink below its content
+				   width and pushes the Add button off-screen on a phone. */
+				min-width: 0;
+			}
+
+			.add-feed button:disabled {
+				cursor: default;
+				opacity: 0.6;
 			}
 
 			#post-list li {
@@ -244,6 +278,8 @@ import PwaHead from "../components/PwaHead.astro";
 				align-items: center;
 				flex-wrap: wrap;
 				gap: 0.5rem;
+				/* Sits below .add-feed now, which brings its own bottom margin. */
+				margin-top: 0.75rem;
 			}
 
 			.import-opml input[type="file"] {
@@ -428,6 +464,26 @@ import PwaHead from "../components/PwaHead.astro";
 		<section class="subscriptions">
 			<h2>Subscribed feeds</h2>
 			<ul id="feed-list"></ul>
+			<!--
+				A <form> so Enter submits from the URL field, the way a
+				single-input form behaves everywhere else; app.ts handles
+				"submit" and suppresses the navigation. `type="url"` so a phone
+				opens its URL keyboard, and so the browser rejects a bare
+				hostname before the request is made.
+			-->
+			<form id="add-feed-form" class="add-feed">
+				<label for="feed-url">Add a feed</label>
+				<input
+					type="url"
+					id="feed-url"
+					name="url"
+					placeholder="https://example.com/feed.xml"
+					autocomplete="off"
+					spellcheck="false"
+					required
+				/>
+				<button id="add-feed-button" type="submit">Add</button>
+			</form>
 			<div class="import-opml">
 				<label for="opml-input">Import OPML file</label>
 				<input type="file" id="opml-input" accept=".opml,.xml,text/xml,text/x-opml" />

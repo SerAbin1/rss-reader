@@ -7,9 +7,13 @@ export interface Post {
 }
 
 // A feed document carries channel-level metadata as well as items, so parsing
-// one yields both. `siteUrl` is the feed's own homepage — the human-readable
-// site, not the XML.
+// one yields both. `title` is the feed's own name (RSS <channel><title>, Atom's
+// feed-level <title>) — what a manually added feed is listed as, since a
+// hand-typed URL has no better label. `siteUrl` is the feed's own homepage —
+// the human-readable site, not the XML. Both are null when the document
+// doesn't declare them.
 export interface ParsedFeed {
+	title: string | null;
 	siteUrl: string | null;
 	posts: Post[];
 }
@@ -22,12 +26,25 @@ export function parseFeed(xmlText: string, feedUrl: string): ParsedFeed {
 
 	const rootName = doc.documentElement?.localName;
 	if (rootName === "rss" || doc.querySelector("rss")) {
-		return { siteUrl: rssSiteUrl(doc), posts: parseRss(doc, feedUrl) };
+		return {
+			title: rssTitle(doc),
+			siteUrl: rssSiteUrl(doc),
+			posts: parseRss(doc, feedUrl),
+		};
 	}
 	if (rootName === "feed") {
-		return { siteUrl: atomSiteUrl(doc), posts: parseAtom(doc, feedUrl) };
+		return {
+			title: atomTitle(doc),
+			siteUrl: atomSiteUrl(doc),
+			posts: parseAtom(doc, feedUrl),
+		};
 	}
 	throw new Error("Unrecognized feed format (not RSS or Atom)");
+}
+
+// Child combinator, not a bare `title`: every <item> has one too.
+function rssTitle(doc: Document): string | null {
+	return doc.querySelector("channel > title")?.textContent?.trim() || null;
 }
 
 // The feed document is the authoritative source for its own homepage. OPML's
@@ -42,6 +59,17 @@ export function parseFeed(xmlText: string, feedUrl: string): ParsedFeed {
 function rssSiteUrl(doc: Document): string | null {
 	// Child combinator, not a bare `link`: every <item> has one too.
 	return doc.querySelector("channel > link")?.textContent?.trim() || null;
+}
+
+// Walked like atomSiteUrl below, and for the same reason: every <entry> has
+// its own <title>, and that title names the entry rather than the feed.
+function atomTitle(doc: Document): string | null {
+	const root = doc.documentElement;
+	if (!root) return null;
+	for (const child of root.children) {
+		if (child.localName === "title") return child.textContent?.trim() || null;
+	}
+	return null;
 }
 
 function atomSiteUrl(doc: Document): string | null {

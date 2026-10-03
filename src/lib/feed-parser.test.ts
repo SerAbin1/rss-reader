@@ -34,6 +34,14 @@ describe("parseFeed (RSS)", () => {
 		);
 	});
 
+	it("reads the channel title, not an item's", () => {
+		// What a hand-added feed gets listed as, since a typed URL has no
+		// label of its own.
+		expect(parseFeed(rssXml, "https://example.com/rss.xml").title).toBe(
+			"Sample RSS Blog",
+		);
+	});
+
 	it("uses the guid element even when it isn't a URL", () => {
 		const { posts } = parseFeed(rssXml, "https://example.com/rss.xml");
 		expect(posts[1].guid).toBe("urn:uuid:second-post");
@@ -55,6 +63,12 @@ describe("parseFeed (Atom)", () => {
 		// Must not pick up an <entry>'s own links, nor the feed's rel=self.
 		expect(parseFeed(atomXml, "https://example.org/atom.xml").siteUrl).toBe(
 			"https://example.org/",
+		);
+	});
+
+	it("reads the feed-level title, not an entry's", () => {
+		expect(parseFeed(atomXml, "https://example.org/atom.xml").title).toBe(
+			"Sample Atom Blog",
 		);
 	});
 
