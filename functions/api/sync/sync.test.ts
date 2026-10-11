@@ -86,6 +86,23 @@ describe("pair", () => {
 		expect(res.status).toBe(401);
 		expect(sqlFor(calls, "INSERT INTO sync_group")).toBeUndefined();
 	});
+
+	it("sweeps expired codes before issuing a new one", async () => {
+		const { db, calls } = fakeDb(() => ({}));
+		const before = Date.now();
+		const body = await (await pair({ request: post({}), env: { DB: db } })).json();
+
+		const sweep = sqlFor(calls, "DELETE FROM pair_code WHERE expires_at <=");
+		expect(sweep).toBeDefined();
+		// Swept against "now", so the code about to be issued (now + TTL) is
+		// never caught by it.
+		const sweptBefore = sweep?.values[0] as number;
+		expect(sweptBefore).toBeGreaterThanOrEqual(before);
+		expect(sweptBefore).toBeLessThan(body.expiresAt);
+		expect(calls.indexOf(sweep!)).toBeLessThan(
+			calls.indexOf(sqlFor(calls, "INSERT INTO pair_code")!),
+		);
+	});
 });
 
 describe("claim", () => {

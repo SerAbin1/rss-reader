@@ -62,6 +62,16 @@ export async function onRequestPost(ctx: SyncContext): Promise<Response> {
 			.run();
 	}
 
+	// D1 has no TTL, so expired codes are swept here, where codes are made:
+	// the table then never holds more than the last few minutes' worth. Safe
+	// to delete outright — /claim answers an unknown code exactly as it does
+	// an expired one, so a swept row is indistinguishable from a kept one.
+	// `<=` because a code stops being usable at the instant it expires (see
+	// isPairCodeUsable).
+	await ctx.env.DB.prepare("DELETE FROM pair_code WHERE expires_at <= ?")
+		.bind(now)
+		.run();
+
 	const pairCode = randomPairCode();
 	const expiresAt = now + CODE_TTL_MS;
 	await ctx.env.DB.prepare(
