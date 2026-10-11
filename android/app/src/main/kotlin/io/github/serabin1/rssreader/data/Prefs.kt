@@ -102,6 +102,7 @@ class Prefs(context: Context) {
             refreshButton = prefs[REFRESH_BUTTON] ?: defaults.refreshButton,
         )
     }
+
     suspend fun refreshSettings(): RefreshSettings = refreshSettings.first()
 
     suspend fun setRefreshSettings(value: RefreshSettings) {
@@ -118,6 +119,7 @@ class Prefs(context: Context) {
     val startScreen: Flow<StartScreen> = settings.data.map { prefs ->
         StartScreen.entries.firstOrNull { it.name == prefs[START_SCREEN] } ?: StartScreen.Home
     }
+
     suspend fun setStartScreen(value: StartScreen) {
         settings.edit { it[START_SCREEN] = value.name }
     }

@@ -33,15 +33,24 @@ data class PairResponse(
     val deviceToken: String? = null,
 )
 
-@Serializable private data class WatermarkBody(val lastReadAt: String? = null)
-@Serializable private data class PairBody(val lastReadAt: String? = null, val replace: Boolean? = null)
-@Serializable private data class OkBody(val ok: Boolean = true)
-@Serializable private data class FeedsBody(val feeds: List<SyncedFeed>)
-@Serializable private data class FeedChange(val feedUrl: String, val title: String? = null, val deleted: Boolean? = null)
-@Serializable private data class FeedChangesBody(val feeds: List<FeedChange>)
-@Serializable private data class ClaimBody(val code: String)
-@Serializable private data class ClaimResponse(val deviceToken: String? = null)
-@Serializable private data class ErrorBody(val error: String? = null)
+@Serializable
+private data class WatermarkBody(val lastReadAt: String? = null)
+@Serializable
+private data class PairBody(val lastReadAt: String? = null, val replace: Boolean? = null)
+@Serializable
+private data class OkBody(val ok: Boolean = true)
+@Serializable
+private data class FeedsBody(val feeds: List<SyncedFeed>)
+@Serializable
+private data class FeedChange(val feedUrl: String, val title: String? = null, val deleted: Boolean? = null)
+@Serializable
+private data class FeedChangesBody(val feeds: List<FeedChange>)
+@Serializable
+private data class ClaimBody(val code: String)
+@Serializable
+private data class ClaimResponse(val deviceToken: String? = null)
+@Serializable
+private data class ErrorBody(val error: String? = null)
 
 // Port of src/lib/sync-client.ts against the web app's /api/sync endpoints.
 // The watermark is epoch millis on this side and an ISO string on the wire.

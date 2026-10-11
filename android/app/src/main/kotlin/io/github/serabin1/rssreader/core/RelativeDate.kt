@@ -42,9 +42,15 @@ object RelativeDate {
     // long list formats hundreds of dates — so the last one is kept.
     @Volatile private var cached: Triple<ZoneId, Locale, DateTimeFormatter>? = null
 
-    private fun fullDateFormatter(zone: ZoneId, locale: Locale): DateTimeFormatter {
+    private fun fullDateFormatter(
+        zone: ZoneId,
+        locale: Locale,
+    ): DateTimeFormatter {
         cached?.let { (z, l, f) -> if (z == zone && l == locale) return f }
-        return DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale).withZone(zone)
+        return DateTimeFormatter
+            .ofLocalizedDate(FormatStyle.MEDIUM)
+            .withLocale(locale)
+            .withZone(zone)
             .also { cached = Triple(zone, locale, it) }
     }
 }

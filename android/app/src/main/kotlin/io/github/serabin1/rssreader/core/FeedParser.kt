@@ -7,25 +7,36 @@ import io.github.serabin1.rssreader.core.Xml.childText
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 
-class FeedParseException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class FeedParseException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 // Port of the web app's src/lib/feed-parser.ts. What counts as a post is kept
 // identical — the same required fields, the same date fallbacks — because the
 // watermark is shared: a post one client shows and the other silently drops
 // would make "read up to here" mean different things on each device.
 object FeedParser {
-    fun parse(bytes: ByteArray, feedUrl: String): ParsedFeed =
-        parse(feedUrl) { Xml.parse(bytes) }
+    fun parse(
+        bytes: ByteArray,
+        feedUrl: String,
+    ): ParsedFeed = parse(feedUrl) { Xml.parse(bytes) }
 
-    fun parse(text: String, feedUrl: String): ParsedFeed =
-        parse(feedUrl) { Xml.parse(text) }
+    fun parse(
+        text: String,
+        feedUrl: String,
+    ): ParsedFeed = parse(feedUrl) { Xml.parse(text) }
 
-    private fun parse(feedUrl: String, load: () -> Document): ParsedFeed {
-        val doc = try {
-            load()
-        } catch (e: Exception) {
-            throw FeedParseException("Invalid feed XML", e)
-        }
+    private fun parse(
+        feedUrl: String,
+        load: () -> Document,
+    ): ParsedFeed {
+        val doc =
+            try {
+                load()
+            } catch (e: Exception) {
+                throw FeedParseException("Invalid feed XML", e)
+            }
         val root = doc.documentElement
         return when (root?.localName) {
             "rss" -> parseRss(root, feedUrl)
@@ -34,17 +45,25 @@ object FeedParser {
         }
     }
 
-    private fun parseRss(root: Element, feedUrl: String): ParsedFeed {
-        val channel = root.child("channel")
-            ?: return ParsedFeed(title = null, siteUrl = null, posts = emptyList())
+    private fun parseRss(
+        root: Element,
+        feedUrl: String,
+    ): ParsedFeed {
+        val channel =
+            root.child("channel")
+                ?: return ParsedFeed(title = null, siteUrl = null, posts = emptyList())
 
-        val posts = channel.childElements().filter { it.localName == "item" }.mapNotNull { item ->
-            val title = item.childText("title") ?: return@mapNotNull null
-            val link = item.childText("link") ?: return@mapNotNull null
-            val guid = item.childText("guid") ?: link
-            val publishedAt = item.childText("pubDate")?.let(FeedDates::parse) ?: return@mapNotNull null
-            Post(feedUrl, guid, title, link, publishedAt)
-        }.toList()
+        val posts =
+            channel
+                .childElements()
+                .filter { it.localName == "item" }
+                .mapNotNull { item ->
+                    val title = item.childText("title") ?: return@mapNotNull null
+                    val link = item.childText("link") ?: return@mapNotNull null
+                    val guid = item.childText("guid") ?: link
+                    val publishedAt = item.childText("pubDate")?.let(FeedDates::parse) ?: return@mapNotNull null
+                    Post(feedUrl, guid, title, link, publishedAt)
+                }.toList()
 
         // No fallback (e.g. the feed URL's origin) when a feed declares no
         // link: a guessed origin is wrong for anything served off an
@@ -58,16 +77,23 @@ object FeedParser {
 
     // Namespaced lookups use the root's own namespace rather than assuming
     // Atom's, so a feed that forgot its xmlns still parses.
-    private fun parseAtom(root: Element, feedUrl: String): ParsedFeed {
+    private fun parseAtom(
+        root: Element,
+        feedUrl: String,
+    ): ParsedFeed {
         val ns = root.namespaceURI
-        val posts = root.childElements().filter { it.localName == "entry" }.mapNotNull { entry ->
-            val title = entry.childText("title", ns) ?: return@mapNotNull null
-            val link = alternateLink(entry, ns) ?: return@mapNotNull null
-            val guid = entry.childText("id", ns) ?: link
-            val dateText = entry.childText("published", ns) ?: entry.childText("updated", ns)
-            val publishedAt = dateText?.let(FeedDates::parse) ?: return@mapNotNull null
-            Post(feedUrl, guid, title, link, publishedAt)
-        }.toList()
+        val posts =
+            root
+                .childElements()
+                .filter { it.localName == "entry" }
+                .mapNotNull { entry ->
+                    val title = entry.childText("title", ns) ?: return@mapNotNull null
+                    val link = alternateLink(entry, ns) ?: return@mapNotNull null
+                    val guid = entry.childText("id", ns) ?: link
+                    val dateText = entry.childText("published", ns) ?: entry.childText("updated", ns)
+                    val publishedAt = dateText?.let(FeedDates::parse) ?: return@mapNotNull null
+                    Post(feedUrl, guid, title, link, publishedAt)
+                }.toList()
 
         return ParsedFeed(
             title = root.childText("title", ns),
@@ -80,9 +106,15 @@ object FeedParser {
     // the article URL is the one with rel="alternate", or no rel at all (the
     // spec default). Direct children only, so a feed's own link never picks
     // up an entry's.
-    private fun alternateLink(element: Element, ns: String?): String? =
-        element.childElements()
+    private fun alternateLink(
+        element: Element,
+        ns: String?,
+    ): String? =
+        element
+            .childElements()
             .filter { it.localName == "link" && it.namespaceURI == ns }
             .firstOrNull { it.attr("rel").let { rel -> rel.isNullOrEmpty() || rel == "alternate" } }
-            ?.attr("href")?.trim()?.ifEmpty { null }
+            ?.attr("href")
+            ?.trim()
+            ?.ifEmpty { null }
 }

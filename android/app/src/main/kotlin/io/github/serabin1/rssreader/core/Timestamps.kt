@@ -17,8 +17,10 @@ import java.util.Locale
 // fractional digits, always "Z" — so it is fixed here rather than left to
 // Instant.toString(), which drops the fraction when it is zero.
 object IsoTimestamp {
-    private val FORMAT = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
-        .withZone(ZoneOffset.UTC)
+    private val FORMAT =
+        DateTimeFormatter
+            .ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
+            .withZone(ZoneOffset.UTC)
 
     fun format(epochMillis: Long): String = FORMAT.format(Instant.ofEpochMilli(epochMillis))
 
@@ -29,36 +31,41 @@ object IsoTimestamp {
 // variation feeds in the wild get wrong. The browser's Date parser is lenient
 // about all of them; this tries the shapes it accepts, most common first.
 object FeedDates {
-    private fun pattern(p: String): DateTimeFormatter = DateTimeFormatterBuilder()
-        .parseCaseInsensitive()
-        .appendPattern(p)
-        .toFormatter(Locale.ENGLISH)
+    private fun pattern(p: String): DateTimeFormatter =
+        DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendPattern(p)
+            .toFormatter(Locale.ENGLISH)
 
-    private val zoned = listOf(
-        DateTimeFormatter.RFC_1123_DATE_TIME,
-        pattern("[EEE, ]d MMM yyyy HH:mm[:ss] Z"),
-        pattern("[EEE, ]d MMM yyyy HH:mm[:ss] z"),
-        pattern("[EEE, ]d MMM yy HH:mm[:ss] Z"),
-        pattern("[EEE, ]d MMM yy HH:mm[:ss] z"),
-        DateTimeFormatter.ISO_OFFSET_DATE_TIME,
-        DateTimeFormatter.ISO_ZONED_DATE_TIME,
-    )
+    private val zoned =
+        listOf(
+            DateTimeFormatter.RFC_1123_DATE_TIME,
+            pattern("[EEE, ]d MMM yyyy HH:mm[:ss] Z"),
+            pattern("[EEE, ]d MMM yyyy HH:mm[:ss] z"),
+            pattern("[EEE, ]d MMM yy HH:mm[:ss] Z"),
+            pattern("[EEE, ]d MMM yy HH:mm[:ss] z"),
+            DateTimeFormatter.ISO_OFFSET_DATE_TIME,
+            DateTimeFormatter.ISO_ZONED_DATE_TIME,
+        )
 
     fun parse(raw: String): Long? {
         val text = raw.trim().replace(Regex("\\s+"), " ")
         if (text.isEmpty()) return null
 
         for (formatter in zoned) {
-            val instant = runCatching { ZonedDateTime.parse(text, formatter).toInstant() }.getOrNull()
-                ?: runCatching { OffsetDateTime.parse(text, formatter).toInstant() }.getOrNull()
+            val instant =
+                runCatching { ZonedDateTime.parse(text, formatter).toInstant() }.getOrNull()
+                    ?: runCatching { OffsetDateTime.parse(text, formatter).toInstant() }.getOrNull()
             if (instant != null) return instant.truncatedTo(ChronoUnit.MILLIS).toEpochMilli()
         }
         // No offset at all. JS reads a bare date as UTC midnight; a bare
         // date-time it reads as local, which would make the same post sort
         // differently on two devices — UTC for both keeps them identical.
-        runCatching { LocalDateTime.parse(text, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }.getOrNull()
+        runCatching { LocalDateTime.parse(text, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }
+            .getOrNull()
             ?.let { return it.toInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.MILLIS).toEpochMilli() }
-        runCatching { LocalDate.parse(text, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
+        runCatching { LocalDate.parse(text, DateTimeFormatter.ISO_LOCAL_DATE) }
+            .getOrNull()
             ?.let { return it.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
         return null
     }

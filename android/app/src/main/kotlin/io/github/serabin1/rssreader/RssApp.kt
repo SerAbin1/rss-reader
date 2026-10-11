@@ -19,24 +19,30 @@ import kotlinx.coroutines.launch
 
 // Hand-wired rather than Hilt: a handful of singletons, built once, read from
 // one place. Same "raw API first" habit as the web app.
-class AppContainer(app: Application) {
+class AppContainer(
+    app: Application,
+) {
     val http = httpClient()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     // Prelaunch: a schema change rebuilds the database rather than migrating
     // it. Everything in it but favourites is refetched on the next refresh.
     // Replace with real migrations before favourites matter to anyone.
-    private val db = Room.databaseBuilder(app, AppDatabase::class.java, "reader.db")
-        .fallbackToDestructiveMigration(dropAllTables = true)
-        .build()
+    private val db =
+        Room
+            .databaseBuilder(app, AppDatabase::class.java, "reader.db")
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
     val prefs = Prefs(app)
-    val reader = Reader(
-        db = db,
-        prefs = prefs,
-        fetcher = FeedFetcher(http),
-        sync = SyncApi(http, BuildConfig.WEB_ORIGIN),
-        curated = CuratedFeeds(app, http, BuildConfig.WEB_ORIGIN),
-        scope = scope,
-    )
+    val reader =
+        Reader(
+            db = db,
+            prefs = prefs,
+            fetcher = FeedFetcher(http),
+            sync = SyncApi(http, BuildConfig.WEB_ORIGIN),
+            curated = CuratedFeeds(app, http, BuildConfig.WEB_ORIGIN),
+            scope = scope,
+        )
 }
 
 class RssApp : Application() {

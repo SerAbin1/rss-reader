@@ -6,7 +6,11 @@ package io.github.serabin1.rssreader.core
 // what to keep locally. The server owns the timestamps, so it alone decides
 // last-write-wins; this device only reports what the group doesn't know.
 
-data class RemoteFeed(val feedUrl: String, val title: String, val deleted: Boolean)
+data class RemoteFeed(
+    val feedUrl: String,
+    val title: String,
+    val deleted: Boolean,
+)
 
 data class ReconcilePush(
     // Personal feeds the group has never heard of: adds made before pairing
@@ -26,19 +30,29 @@ data class ReconcileResult(
 )
 
 object Reconcile {
-    fun planPush(personal: List<Feed>, curatedUrls: Set<String>, remote: List<RemoteFeed>): ReconcilePush {
+    fun planPush(
+        personal: List<Feed>,
+        curatedUrls: Set<String>,
+        remote: List<RemoteFeed>,
+    ): ReconcilePush {
         val remoteUrls = remote.map { it.feedUrl }.toSet()
         return ReconcilePush(
-            additions = personal.filter { it.feedUrl !in remoteUrls && it.feedUrl !in curatedUrls }
-                .map { Feed(it.feedUrl, it.title) },
+            additions =
+                personal
+                    .filter { it.feedUrl !in remoteUrls && it.feedUrl !in curatedUrls }
+                    .map { Feed(it.feedUrl, it.title) },
             retractions = remote.filter { !it.deleted && it.feedUrl in curatedUrls }.map { it.feedUrl },
         )
     }
 
     // Curated feeds are never touched by the group: they're kept whatever the
     // group says, and never adopted as personal.
-    fun applyGroup(group: List<RemoteFeed>, curatedUrls: Set<String>): ReconcileResult = ReconcileResult(
-        live = group.filter { !it.deleted && it.feedUrl !in curatedUrls }.map { Feed(it.feedUrl, it.title) },
-        removed = group.filter { it.deleted && it.feedUrl !in curatedUrls }.map { it.feedUrl },
-    )
+    fun applyGroup(
+        group: List<RemoteFeed>,
+        curatedUrls: Set<String>,
+    ): ReconcileResult =
+        ReconcileResult(
+            live = group.filter { !it.deleted && it.feedUrl !in curatedUrls }.map { Feed(it.feedUrl, it.title) },
+            removed = group.filter { it.deleted && it.feedUrl !in curatedUrls }.map { it.feedUrl },
+        )
 }

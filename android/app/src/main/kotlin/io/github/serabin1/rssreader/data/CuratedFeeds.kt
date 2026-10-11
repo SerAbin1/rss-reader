@@ -21,23 +21,25 @@ class CuratedFeeds(
 ) {
     private val cache = File(context.filesDir, "curated-feeds.opml")
 
-    suspend fun load(): List<Feed> = withContext(Dispatchers.IO) {
-        fetchLive()?.let { return@withContext it }
-        parseOrNull(runCatching { cache.readText() }.getOrNull())
-            ?: parseOrNull(runCatching { context.assets.open(ASSET).use { it.reader().readText() } }.getOrNull())
-            ?: emptyList()
-    }
-
-    private fun fetchLive(): List<Feed>? = try {
-        client.newCall(Request.Builder().url("$origin/$ASSET").build()).execute().use { response ->
-            if (!response.isSuccessful) return null
-            val text = response.body.string()
-            parseOrNull(text)?.also { cache.writeText(text) }
+    suspend fun load(): List<Feed> =
+        withContext(Dispatchers.IO) {
+            fetchLive()?.let { return@withContext it }
+            parseOrNull(runCatching { cache.readText() }.getOrNull())
+                ?: parseOrNull(runCatching { context.assets.open(ASSET).use { it.reader().readText() } }.getOrNull())
+                ?: emptyList()
         }
-    } catch (e: Exception) {
-        Log.w(TAG, "Couldn't fetch the curated feed list", e)
-        null
-    }
+
+    private fun fetchLive(): List<Feed>? =
+        try {
+            client.newCall(Request.Builder().url("$origin/$ASSET").build()).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val text = response.body.string()
+                parseOrNull(text)?.also { cache.writeText(text) }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't fetch the curated feed list", e)
+            null
+        }
 
     private fun parseOrNull(text: String?): List<Feed>? =
         text?.let { runCatching { Opml.parse(it) }.getOrNull() }?.takeIf { it.isNotEmpty() }

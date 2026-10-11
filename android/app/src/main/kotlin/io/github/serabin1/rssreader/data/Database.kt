@@ -60,7 +60,10 @@ data class ArticleRow(
     val favourite: Boolean,
 )
 
-data class FeedCount(val feedUrl: String, val count: Int)
+data class FeedCount(
+    val feedUrl: String,
+    val count: Int,
+)
 
 // One ordering everywhere "next unread" is decided — the list, the reader's
 // Next button and the watermark rule must agree on which post comes first,
@@ -85,10 +88,16 @@ interface FeedDao {
     suspend fun upsert(feeds: List<FeedEntity>)
 
     @Query("UPDATE feed SET siteUrl = COALESCE(:siteUrl, siteUrl), lastError = NULL WHERE feedUrl = :feedUrl")
-    suspend fun markFetched(feedUrl: String, siteUrl: String?)
+    suspend fun markFetched(
+        feedUrl: String,
+        siteUrl: String?,
+    )
 
     @Query("UPDATE feed SET lastError = :error WHERE feedUrl = :feedUrl")
-    suspend fun markFailed(feedUrl: String, error: String)
+    suspend fun markFailed(
+        feedUrl: String,
+        error: String,
+    )
 
     @Query("SELECT COUNT(*) FROM feed WHERE lastError IS NOT NULL")
     suspend fun failedCount(): Int
@@ -120,7 +129,11 @@ interface ArticleDao {
     fun observeFavouriteCount(): Flow<Int>
 
     @Query("UPDATE article SET favourite = :favourite WHERE feedUrl = :feedUrl AND guid = :guid")
-    suspend fun setFavourite(feedUrl: String, guid: String, favourite: Boolean)
+    suspend fun setFavourite(
+        feedUrl: String,
+        guid: String,
+        favourite: Boolean,
+    )
 
     @Query(
         """SELECT a.feedUrl, a.guid, f.title AS feedTitle, a.title, a.link, a.publishedAt, a.favourite
@@ -133,7 +146,10 @@ interface ArticleDao {
         """SELECT COUNT(*) FROM article a JOIN feed f ON f.feedUrl = a.feedUrl
            WHERE a.publishedAt > :after AND a.publishedAt <= :upTo""",
     )
-    suspend fun countUnreadUpTo(after: Long, upTo: Long): Int
+    suspend fun countUnreadUpTo(
+        after: Long,
+        upTo: Long,
+    ): Int
 
     @Query("SELECT MAX(a.publishedAt) FROM article a JOIN feed f ON f.feedUrl = a.feedUrl WHERE a.publishedAt > :after")
     suspend fun lastUnreadPublishedAt(after: Long): Long?
@@ -151,5 +167,6 @@ interface ArticleDao {
 @Database(entities = [FeedEntity::class, ArticleEntity::class], version = 2)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun feedDao(): FeedDao
+
     abstract fun articleDao(): ArticleDao
 }

@@ -16,15 +16,18 @@ data class FeedAdditions(
 
 object Subscriptions {
     fun normalizeFeedUrl(raw: String): String? {
-        val uri = try {
-            URI(raw.trim())
-        } catch (e: URISyntaxException) {
-            return null
-        }
+        val uri =
+            try {
+                URI(raw.trim())
+            } catch (e: URISyntaxException) {
+                return null
+            }
         val scheme = uri.scheme?.lowercase() ?: return null
         if (scheme != "http" && scheme != "https") return null
-        val host = (uri.host ?: uri.rawAuthority?.substringAfterLast('@')?.substringBefore(':'))
-            ?.lowercase()?.ifEmpty { null } ?: return null
+        val host =
+            (uri.host ?: uri.rawAuthority?.substringAfterLast('@')?.substringBefore(':'))
+                ?.lowercase()
+                ?.ifEmpty { null } ?: return null
 
         return buildString {
             append(scheme).append("://")
@@ -39,7 +42,10 @@ object Subscriptions {
         }
     }
 
-    fun planAdditions(candidates: List<Feed>, existing: List<Feed>): FeedAdditions {
+    fun planAdditions(
+        candidates: List<Feed>,
+        existing: List<Feed>,
+    ): FeedAdditions {
         val subscribed = existing.mapNotNull { normalizeFeedUrl(it.feedUrl) }.toSet()
         val added = mutableListOf<Feed>()
         val claimed = mutableSetOf<String>()
@@ -49,8 +55,14 @@ object Subscriptions {
         for (candidate in candidates) {
             val feedUrl = normalizeFeedUrl(candidate.feedUrl)
             when {
-                feedUrl == null -> invalid++
-                feedUrl in subscribed || feedUrl in claimed -> alreadySubscribed++
+                feedUrl == null -> {
+                    invalid++
+                }
+
+                feedUrl in subscribed || feedUrl in claimed -> {
+                    alreadySubscribed++
+                }
+
                 else -> {
                     claimed += feedUrl
                     added += candidate.copy(feedUrl = feedUrl)
@@ -60,10 +72,11 @@ object Subscriptions {
         return FeedAdditions(added, alreadySubscribed, invalid)
     }
 
-    fun describeImport(additions: FeedAdditions): String = buildList {
-        val count = additions.added.size
-        add("Imported $count feed${if (count == 1) "" else "s"}.")
-        if (additions.alreadySubscribed > 0) add("${additions.alreadySubscribed} already subscribed.")
-        if (additions.invalid > 0) add("${additions.invalid} skipped — not a valid URL.")
-    }.joinToString(" ")
+    fun describeImport(additions: FeedAdditions): String =
+        buildList {
+            val count = additions.added.size
+            add("Imported $count feed${if (count == 1) "" else "s"}.")
+            if (additions.alreadySubscribed > 0) add("${additions.alreadySubscribed} already subscribed.")
+            if (additions.invalid > 0) add("${additions.invalid} skipped — not a valid URL.")
+        }.joinToString(" ")
 }
