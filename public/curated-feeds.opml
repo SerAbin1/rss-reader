@@ -42,7 +42,6 @@
     <outline htmlUrl="https://fabiensanglard.net/rss.xml" text="Fabien Sanglard" title="Fabien Sanglard" xmlUrl="https://fabiensanglard.net/rss.xml" />
     <outline htmlUrl="https://alexharri.com/rss.xml" text="Blog | Alex Harri" title="Blog | Alex Harri" xmlUrl="https://alexharri.com/rss.xml" />
     <outline htmlUrl="https://overreacted.io/rss.xml" text="overreacted — A blog by Dan Abramov" title="overreacted — A blog by Dan Abramov" xmlUrl="https://overreacted.io/rss.xml" />
-    <outline htmlUrl="https://rss.app/feeds/OLLUdv97mo37pGIF.xml" text="Engineering Blog" title="Engineering Blog" xmlUrl="https://rss.app/feeds/OLLUdv97mo37pGIF.xml" />
     <outline htmlUrl="https://rss.beehiiv.com/feeds/wnEIOSd99q.xml" text="Sloth Bytes" title="Sloth Bytes" xmlUrl="https://rss.beehiiv.com/feeds/wnEIOSd99q.xml" />
     <outline htmlUrl="https://www.joshwcomeau.com/rss.xml" text="Josh Comeau's blog" title="Josh Comeau's blog" xmlUrl="https://www.joshwcomeau.com/rss.xml" />
     <outline htmlUrl="https://beej.us/blog/rss.xml" text="Beej's Bit Bucket" title="Beej's Bit Bucket" xmlUrl="https://beej.us/blog/rss.xml" />
@@ -55,13 +54,10 @@
     <outline htmlUrl="https://blog.cloudflare.com/rss/" text="Cloudflare Blog" title="Cloudflare Blog" xmlUrl="https://blog.cloudflare.com/rss/" />
 </outline>
     <outline text="Social" title="Social">    <outline htmlUrl="https://indconlawphil.wordpress.com/feed/" text="Constitutional Law and Philosophy" title="Constitutional Law and Philosophy" xmlUrl="https://indconlawphil.wordpress.com/feed/" />
-    <outline htmlUrl="https://rss.app/feeds/f46lbds3N7IB5u0a.xml" text="Supreme Court Observer - A living archive of the Supreme Court of India." title="Supreme Court Observer - A living archive of the Supreme Court of India." xmlUrl="https://rss.app/feeds/f46lbds3N7IB5u0a.xml" />
 </outline>
     <outline text="BackEnd" title="BackEnd">    <outline htmlUrl="https://sahilserver.substack.com/feed" text="Brain Bytes &amp; Binary" title="Brain Bytes &amp; Binary" xmlUrl="https://sahilserver.substack.com/feed" />
 </outline>
     <outline text="ML" title="ML">    <outline htmlUrl="https://www.fast.ai/index.xml" text="fast.ai" title="fast.ai" xmlUrl="https://www.fast.ai/index.xml" />
-</outline>
-    <outline text="CyberSecurity" title="CyberSecurity">    <outline htmlUrl="https://heartburn.dev/rss/" text="Cyber Security Blog" title="Cyber Security Blog" xmlUrl="https://heartburn.dev/rss/" />
 </outline>
     <outline text="Films" title="Films" />
   </body>
