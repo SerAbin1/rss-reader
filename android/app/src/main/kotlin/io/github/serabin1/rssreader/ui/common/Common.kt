@@ -45,6 +45,16 @@ fun openInBrowser(context: Context, url: String) {
     }
 }
 
+// The full default browser rather than a Custom Tab: a plain VIEW intent in
+// its own task, so the post lands as an ordinary tab there (in Firefox, say)
+// instead of in a sheet over this app.
+fun openInDefaultBrowser(context: Context, url: String) {
+    val view = Intent(Intent.ACTION_VIEW, url.toUri())
+        .addCategory(Intent.CATEGORY_BROWSABLE)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(view) }
+}
+
 fun share(context: Context, title: String, url: String) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"

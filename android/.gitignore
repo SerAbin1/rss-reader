@@ -5,3 +5,7 @@ local.properties
 .idea/
 *.iml
 captures/
+
+# The release signing key lives only in CI secrets and your own backup.
+*.jks
+*.keystore

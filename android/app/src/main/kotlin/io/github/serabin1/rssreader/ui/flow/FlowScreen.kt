@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.serabin1.rssreader.data.ArticleRow
 import io.github.serabin1.rssreader.ui.common.RefreshableBox
 import io.github.serabin1.rssreader.ui.common.openInBrowser
+import io.github.serabin1.rssreader.ui.common.openInDefaultBrowser
 import io.github.serabin1.rssreader.ui.common.readerViewModel
 
 // The article list, with Read You's filter bar along the bottom: Unread,
@@ -51,6 +52,11 @@ fun FlowScreen(startWithFavourites: Boolean, onBack: () -> Unit) {
     val open = { article: ArticleRow ->
         vm.opened(article)
         openInBrowser(context, article.link)
+    }
+    // Counts as opening it, same as a tap.
+    val openExternally = { article: ArticleRow ->
+        vm.opened(article)
+        openInDefaultBrowser(context, article.link)
     }
 
     Scaffold(
@@ -107,6 +113,7 @@ fun FlowScreen(startWithFavourites: Boolean, onBack: () -> Unit) {
                 else -> ArticleList(
                     sections = list,
                     onOpen = open,
+                    onOpenInBrowser = openExternally,
                     onToggleFavourite = vm::toggleFavourite,
                     onMarkUpTo = null,
                     modifier = Modifier.padding(padding),
@@ -126,6 +133,7 @@ fun FlowScreen(startWithFavourites: Boolean, onBack: () -> Unit) {
                     else -> ArticleList(
                         sections = list,
                         onOpen = open,
+                        onOpenInBrowser = openExternally,
                         onToggleFavourite = vm::toggleFavourite,
                         onMarkUpTo = { vm.markUpTo(it.publishedAt) },
                     )

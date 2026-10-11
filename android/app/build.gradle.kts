@@ -20,20 +20,38 @@ android {
         applicationId = "io.github.serabin1.rssreader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes its run number, so each published APK installs as an
+        // update over the previous one. Local builds are 1.
+        val buildNumber = providers.gradleProperty("buildNumber").map(String::toInt).getOrElse(1)
+        versionCode = buildNumber
+        versionName = "0.1.$buildNumber"
         // The web app's origin: home of the sync endpoints and the live curated
         // feed list. Feeds themselves are fetched directly — Android has no
         // CORS, so /api/feed is a web-only concern.
         buildConfigField("String", "WEB_ORIGIN", "\"https://my-rss-reader.pages.dev\"")
     }
 
+    // The release key exists only in CI secrets. Every published APK must carry
+    // the same signature or Android refuses to install it as an update, so it
+    // can't be the debug key, which is generated per machine.
+    val releaseKeystore = providers.environmentVariable("ANDROID_KEYSTORE_FILE").orNull
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Prelaunch: signed with the debug key so an optimised build can be
-            // installed locally — debug builds run Compose unoptimised and
-            // scroll noticeably worse. Needs a real key before any release.
-            signingConfig = signingConfigs.getByName("debug")
+            // Locally, without the release key, signed with the debug key so an
+            // optimised build can still be installed — debug builds run Compose
+            // unoptimised and scroll noticeably worse.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

@@ -59,7 +59,7 @@ After editing anything under `scripts/icons/`, run `bash scripts/generate-icons.
 
 ## Android app
 
-`android/` is a native Kotlin app (Jetpack Compose, Material 3) modelled on [Read You](https://github.com/Ashinch/ReadYou): a feeds page and the unified unread list. Posts open in the browser (a Custom Tab), as they do on the web. It follows the web app's rules and joins the same sync group:
+`android/` is a native Kotlin app (Jetpack Compose, Material 3) modelled on [Read You](https://github.com/Ashinch/ReadYou): a feeds page and the unified unread list. Posts open in the browser (a Custom Tab; long-press → Open in browser for a full tab in the default browser), as they do on the web. It follows the web app's rules and joins the same sync group:
 
 - **Same read model.** One `lastReadAt` watermark, earliest unread first, opening the next unread post advances it, ✓ marks read up to a post. The decisions are ported from `src/lib` into `android/app/src/main/kotlin/.../core/`, and the TS tests are ported alongside them, reading the same fixtures from `src/lib/__fixtures__`
 - **Same sync.** Pairs through `/api/sync` (Settings → Set up sync / Join with a code) and shares the watermark and personal feeds with the web app and other devices. Pairing codes and QR links are interchangeable between the two
@@ -77,7 +77,7 @@ cd android
 ./gradlew :app:installDebug        # build and install on a connected device/emulator
 ```
 
-Needs JDK 21 and the Android SDK (`android/local.properties` → `sdk.dir`). CI runs the unit tests and builds a debug APK (`.github/workflows/android.yml`).
+Needs JDK 21 and the Android SDK (`android/local.properties` → `sdk.dir`). CI runs the unit tests and builds a debug APK (`.github/workflows/android.yml`). Every such push to `main` that passes also publishes a signed release APK to GitHub Releases (`android-v0.1.<run number>`; the run number is the version code, so each installs over the last). Signing needs three repo secrets: `ANDROID_KEYSTORE_BASE64` (the keystore, base64), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`; without them the release job fails rather than ship a debug-signed APK. Keep a backup of the keystore — losing it means users must uninstall to take any later release. Local `installRelease` builds are debug-signed, so they can't install over a released APK (or vice versa) without an uninstall.
 
 ## Deployment
 

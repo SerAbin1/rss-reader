@@ -56,6 +56,7 @@ import io.github.serabin1.rssreader.ui.common.share
 fun ArticleList(
     sections: List<DaySection>,
     onOpen: (ArticleRow) -> Unit,
+    onOpenInBrowser: (ArticleRow) -> Unit,
     onToggleFavourite: (ArticleRow) -> Unit,
     // Null where marking read makes no sense (the Favourites tab).
     onMarkUpTo: ((ArticleRow) -> Unit)?,
@@ -80,7 +81,7 @@ fun ArticleList(
                 contentType = { "article" },
             ) { listed ->
                 SwipeToFavourite(listed.row, onToggleFavourite) {
-                    ArticleItem(listed, onOpen, onToggleFavourite, onMarkUpTo)
+                    ArticleItem(listed, onOpen, onOpenInBrowser, onToggleFavourite, onMarkUpTo)
                 }
             }
         }
@@ -130,6 +131,7 @@ private fun SwipeToFavourite(
 private fun ArticleItem(
     listed: ListedArticle,
     onOpen: (ArticleRow) -> Unit,
+    onOpenInBrowser: (ArticleRow) -> Unit,
     onToggleFavourite: (ArticleRow) -> Unit,
     onMarkUpTo: ((ArticleRow) -> Unit)?,
 ) {
@@ -194,6 +196,7 @@ private fun ArticleItem(
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("Open in browser") }, onClick = { menu = false; onOpenInBrowser(article) })
             DropdownMenuItem(
                 text = { Text(if (article.favourite) "Remove from favourites" else "Add to favourites") },
                 onClick = { menu = false; onToggleFavourite(article) },
