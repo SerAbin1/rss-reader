@@ -7,6 +7,14 @@ interface RequestContext {
 }
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
+const USER_AGENT = "RssReader/1.0 (+https://my-rss-reader.pages.dev)";
+
+// The body, not the Content-Type: plenty of real feeds are mislabelled
+// text/html, but none of them start with an HTML document.
+export function looksLikeHtmlPage(body: string): boolean {
+	const start = body.trimStart().slice(0, 64).toLowerCase();
+	return start.startsWith("<!doctype html") || start.startsWith("<html");
+}
 
 export async function onRequestGet({
 	request,
@@ -29,7 +37,11 @@ export async function onRequestGet({
 
 	let feedResponse: Response;
 	try {
-		feedResponse = await fetch(target.toString());
+		// Identifies the reader honestly, as the Android app does. Some hosts
+		// refuse a request with no User-Agent at all.
+		feedResponse = await fetch(target.toString(), {
+			headers: { "User-Agent": USER_AGENT },
+		});
 	} catch {
 		return jsonError("Failed to fetch feed.", 502);
 	}
@@ -39,6 +51,16 @@ export async function onRequestGet({
 	}
 
 	const body = await feedResponse.text();
+	// A 200 that's a web page, not a feed: usually a bot check (SiteGround's
+	// sgcaptcha, Cloudflare's challenge) that some hosts show to datacenter
+	// IPs like this function's — while the same URL works from a phone. Said
+	// plainly here, because the client would only report "Invalid feed XML".
+	if (looksLikeHtmlPage(body)) {
+		return jsonError(
+			"The site sent a web page (likely a bot check) instead of the feed, so the server can't read it.",
+			502,
+		);
+	}
 	return new Response(body, {
 		status: 200,
 		headers: { "Content-Type": "application/xml; charset=utf-8" },

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { onRequestGet } from "./feed";
+import { looksLikeHtmlPage, onRequestGet } from "./feed";
 
 function requestFor(url?: string): Request {
 	const params = url ? `?url=${encodeURIComponent(url)}` : "";
@@ -68,5 +68,43 @@ describe("onRequestGet", () => {
 		});
 
 		expect(res.status).toBe(502);
+	});
+
+	it("502s with an explanation when the site sends a web page instead", async () => {
+		const challenge =
+			'<html><head><meta http-equiv="refresh" content="0;/.well-known/sgcaptcha/"></meta></head></html>';
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(new Response(challenge, { status: 200 })),
+		);
+
+		const res = await onRequestGet({
+			request: requestFor("https://lemire.me/blog/feed/"),
+		});
+		expect(res.status).toBe(502);
+		expect(((await res.json()) as { error: string }).error).toMatch(/bot check/);
+	});
+
+	it("sends an identifying User-Agent", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(new Response("<rss></rss>", { status: 200 }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await onRequestGet({ request: requestFor("https://example.com/rss.xml") });
+		const init = fetchMock.mock.calls[0][1] as RequestInit;
+		expect(new Headers(init.headers).get("User-Agent")).toMatch(/^RssReader\//);
+	});
+});
+
+describe("looksLikeHtmlPage", () => {
+	it("spots an HTML document however it opens", () => {
+		expect(looksLikeHtmlPage("<!DOCTYPE html><html></html>")).toBe(true);
+		expect(looksLikeHtmlPage("\n  <html><body></body></html>")).toBe(true);
+	});
+
+	it("leaves feeds alone, including ones with a leading XML declaration", () => {
+		expect(looksLikeHtmlPage('<?xml version="1.0"?><rss></rss>')).toBe(false);
+		expect(looksLikeHtmlPage("<feed xmlns=\"http://www.w3.org/2005/Atom\"></feed>")).toBe(false);
 	});
 });

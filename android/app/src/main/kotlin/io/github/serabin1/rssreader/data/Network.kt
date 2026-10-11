@@ -42,7 +42,13 @@ class FeedFetcher(private val client: OkHttpClient) {
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw FeedFetchException("Feed responded with ${response.code}.")
-                FeedParser.parse(response.body.bytes(), feedUrl)
+                val bytes = response.body.bytes()
+                // Same check as the web proxy: a 200 that's a web page, usually
+                // a host's bot check, would otherwise read as "Invalid feed XML".
+                if (looksLikeHtmlPage(bytes)) {
+                    throw FeedFetchException("The site sent a web page (likely a bot check) instead of the feed.")
+                }
+                FeedParser.parse(bytes, feedUrl)
             }
         } catch (e: FeedParseException) {
             throw FeedFetchException(e.message ?: "Couldn't parse the feed.", e)
@@ -54,4 +60,11 @@ class FeedFetcher(private val client: OkHttpClient) {
             throw FeedFetchException("Failed to fetch feed.", e)
         }
     }
+}
+
+// The body, not the Content-Type: plenty of real feeds are mislabelled
+// text/html, but none of them start with an HTML document.
+internal fun looksLikeHtmlPage(body: ByteArray): Boolean {
+    val start = String(body, 0, minOf(body.size, 256), Charsets.UTF_8).trimStart().lowercase()
+    return start.startsWith("<!doctype html") || start.startsWith("<html")
 }
