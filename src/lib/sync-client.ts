@@ -90,9 +90,14 @@ export interface PairResponse {
 // device gets a token in the first place. `lastReadAt` seeds a new group with
 // this device's own reading history so opting into sync doesn't throw it
 // away; it's ignored when a token is sent, since that group already has one.
+//
+// A group holds two devices. When it's full this throws a 409 SyncError,
+// and the caller may ask again with `replace`, which unpairs the group's other
+// device to make room.
 export async function startPairing(
 	token: string | null,
 	lastReadAt: string | null,
+	replace = false,
 ): Promise<PairResponse> {
 	const res = await fetch("/api/sync/pair", {
 		method: "POST",
@@ -100,13 +105,19 @@ export async function startPairing(
 			"Content-Type": "application/json",
 			...(token === null ? {} : { Authorization: `Bearer ${token}` }),
 		},
-		body: JSON.stringify({ lastReadAt }),
+		body: JSON.stringify({ lastReadAt, ...(replace ? { replace } : {}) }),
 	});
 	const body = (await res.json()) as PairResponse & { error?: string };
 	if (!res.ok) {
 		throw new SyncError(body.error ?? `sync/pair failed (${res.status})`, res.status);
 	}
 	return body;
+}
+
+// Removes this device from its group on the server, so its token stops
+// working and its place in the group is free. The caller forgets the token.
+export async function leaveSync(token: string): Promise<void> {
+	await request<{ ok: boolean }>("device", token, { method: "DELETE" });
 }
 
 // Unauthenticated by design — the code itself is the credential, and it is

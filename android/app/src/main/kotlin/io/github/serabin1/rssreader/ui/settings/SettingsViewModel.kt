@@ -44,12 +44,27 @@ class SettingsViewModel(private val reader: Reader) : ViewModel() {
     private val messages = Channel<String>(Channel.BUFFERED)
     val message = messages.receiveAsFlow()
 
-    fun startPairing() = busy {
+    // Set when the group already has two devices; Settings then asks whether
+    // to replace the other one, which may be a lost or wiped device that can't
+    // unpair itself.
+    private val _groupFull = MutableStateFlow(false)
+    val groupFull: StateFlow<Boolean> = _groupFull.asStateFlow()
+
+    fun startPairing(replace: Boolean = false) = busy {
+        _groupFull.value = false
         try {
-            _pairing.value = reader.startPairing()
+            _pairing.value = reader.startPairing(replace)
         } catch (e: SyncException) {
-            messages.send("Couldn't start pairing. ${e.message}")
+            if (e.status == 409 && !replace) {
+                _groupFull.value = true
+            } else {
+                messages.send("Couldn't start pairing. ${e.message}")
+            }
         }
+    }
+
+    fun dismissGroupFull() {
+        _groupFull.value = false
     }
 
     fun closePairing() {
@@ -68,8 +83,12 @@ class SettingsViewModel(private val reader: Reader) : ViewModel() {
     }
 
     fun unpair() = busy {
-        reader.unpair()
-        messages.send("This device no longer syncs. Its feeds and reading position stay here.")
+        try {
+            reader.unpair()
+            messages.send("This device no longer syncs. Its feeds and reading position stay here.")
+        } catch (e: SyncException) {
+            messages.send("Couldn't reach the server to unpair. Try again.")
+        }
     }
 
     fun importOpml(text: String) = busy { messages.send(reader.importOpml(text).message) }

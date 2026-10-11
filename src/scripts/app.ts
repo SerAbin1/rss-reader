@@ -18,11 +18,14 @@ import { parseOpml } from "../lib/opml";
 import { isOnline, onConnectivityChange } from "../lib/connectivity";
 import { describeImport, normalizeFeedUrl, planAdditions } from "../lib/subscriptions";
 import {
+	leaveSync,
+	type PairResponse,
 	pullFeeds,
 	pullWatermark,
 	pushFeedChanges,
 	pushWatermark,
 	startPairing,
+	SyncError,
 } from "../lib/sync-client";
 import { formatPairCode, mergeWatermark } from "../lib/sync-state";
 import {
@@ -59,6 +62,8 @@ const syncBannerDismissButton =
 	document.querySelector<HTMLButtonElement>("#sync-banner-dismiss")!;
 const syncSetupButton =
 	document.querySelector<HTMLButtonElement>("#sync-setup-button")!;
+const syncUnpairButton =
+	document.querySelector<HTMLButtonElement>("#sync-unpair-button")!;
 const syncSetupStatusEl =
 	document.querySelector<HTMLParagraphElement>("#sync-setup-status")!;
 const pairingPanelEl =
@@ -445,6 +450,23 @@ let pairingExpiryTimer: ReturnType<typeof setInterval> | undefined;
 function updateSyncSetupButton(): void {
 	syncSetupButton.textContent =
 		syncToken === null ? "Set up sync" : "Add another device";
+	syncUnpairButton.hidden = syncToken === null;
+}
+
+// A group holds two devices. Asked only when the server says it's full: the
+// other device may be one that's gone (lost, wiped, reinstalled) and can't
+// unpair itself, so this is the way to take its place back.
+async function startPairingOrReplace(): Promise<PairResponse | null> {
+	try {
+		return await startPairing(syncToken, lastReadAt);
+	} catch (err) {
+		if (!(err instanceof SyncError && err.status === 409)) throw err;
+		const replace = confirm(
+			"This sync group already has two devices. Replace the other one? " +
+				"It stops syncing, and would need a new code to rejoin.",
+		);
+		return replace ? await startPairing(syncToken, lastReadAt, true) : null;
+	}
 }
 
 function updatePairingExpiry(expiresAt: number): void {
@@ -484,7 +506,8 @@ syncSetupButton.addEventListener("click", async () => {
 	syncSetupButton.disabled = true;
 	syncSetupStatusEl.textContent = "";
 	try {
-		const result = await startPairing(syncToken, lastReadAt);
+		const result = await startPairingOrReplace();
+		if (result === null) return;
 		if (result.deviceToken !== undefined) {
 			await setDeviceToken(result.deviceToken);
 			syncToken = result.deviceToken;
@@ -505,6 +528,35 @@ syncSetupButton.addEventListener("click", async () => {
 });
 
 pairingDoneButton.addEventListener("click", hidePairingPanel);
+
+// Leaves on the server first, so the group's place is actually freed; only
+// then is the token forgotten here. A 401 means the server already let this
+// device go (replaced from the other one), so there's nothing left to free.
+syncUnpairButton.addEventListener("click", async () => {
+	if (syncToken === null) return;
+	if (!confirm("Unpair this device? Its feeds and reading position stay here.")) return;
+	syncUnpairButton.disabled = true;
+	syncSetupStatusEl.textContent = "";
+	try {
+		await leaveSync(syncToken);
+	} catch (err) {
+		if (!(err instanceof SyncError && err.status === 401)) {
+			console.error(err);
+			syncSetupStatusEl.textContent = "Couldn't reach the server to unpair. Try again.";
+			syncUnpairButton.disabled = false;
+			return;
+		}
+	}
+	await setDeviceToken(null);
+	syncToken = null;
+	feedsReconciled = false;
+	hideDegradedBanner();
+	hidePairingPanel();
+	updateSyncSetupButton();
+	syncUnpairButton.disabled = false;
+	syncSetupStatusEl.textContent =
+		"This device no longer syncs. Its feeds and reading position stay here.";
+});
 
 function applyWatermark(next: string | null): void {
 	if (next === null || next === lastReadAt) return;

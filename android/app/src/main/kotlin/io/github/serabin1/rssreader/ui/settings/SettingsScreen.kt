@@ -72,6 +72,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val paired by vm.paired.collectAsStateWithLifecycle()
     val problem by vm.syncProblem.collectAsStateWithLifecycle()
     val pairing by vm.pairing.collectAsStateWithLifecycle()
+    val groupFull by vm.groupFull.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val refresh by vm.refreshSettings.collectAsStateWithLifecycle()
     var choosingInterval by remember { mutableStateOf(false) }
@@ -231,9 +232,26 @@ fun SettingsScreen(onBack: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmUnpair = false },
             title = { Text("Stop syncing this device?") },
-            text = { Text("Your feeds and reading position stay on this device. Your other devices keep syncing with each other.") },
+            text = { Text("Your feeds and reading position stay on this device, and its place in the sync group is freed for another one.") },
             confirmButton = { TextButton(onClick = { confirmUnpair = false; vm.unpair() }) { Text("Unpair") } },
             dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text("Cancel") } },
+        )
+    }
+
+    // The way back from a lost, wiped or reinstalled device, which can't
+    // unpair itself and would otherwise hold the group's second place.
+    if (groupFull) {
+        AlertDialog(
+            onDismissRequest = vm::dismissGroupFull,
+            title = { Text("Sync group is full") },
+            text = {
+                Text(
+                    "A sync group holds two devices, and yours already has two. Replace the other one? " +
+                        "It stops syncing, and would need a new code to rejoin.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.startPairing(replace = true) }) { Text("Replace") } },
+            dismissButton = { TextButton(onClick = vm::dismissGroupFull) { Text("Cancel") } },
         )
     }
 }

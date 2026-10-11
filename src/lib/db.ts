@@ -118,11 +118,14 @@ export async function getDeviceToken(): Promise<string | null> {
 	});
 }
 
-export async function setDeviceToken(token: string): Promise<void> {
+// Null unpairs: no token is what "not paired" means.
+export async function setDeviceToken(token: string | null): Promise<void> {
 	const db = await openDb();
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(META_STORE, "readwrite");
-		tx.objectStore(META_STORE).put(token, DEVICE_TOKEN_KEY);
+		const store = tx.objectStore(META_STORE);
+		if (token === null) store.delete(DEVICE_TOKEN_KEY);
+		else store.put(token, DEVICE_TOKEN_KEY);
 		tx.oncomplete = () => resolve();
 		tx.onerror = () => reject(tx.error);
 	});

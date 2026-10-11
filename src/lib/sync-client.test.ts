@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	claimPairCode,
+	leaveSync,
 	pullFeeds,
 	pullWatermark,
 	pushFeedChanges,
@@ -129,6 +130,38 @@ describe("startPairing", () => {
 			status: 401,
 			message: "Unknown device token.",
 		});
+	});
+});
+
+describe("startPairing on a full group", () => {
+	it("surfaces the 409 so the caller can offer to replace", async () => {
+		stubFetch({ error: "This sync group already has two devices." }, 409);
+		await expect(startPairing("tok", null)).rejects.toMatchObject({ status: 409 });
+	});
+
+	it("asks for the replacement only when told to", async () => {
+		const fetchMock = vi.fn(
+			async (_url: string, _init: RequestInit) =>
+				new Response(JSON.stringify({ groupId: "g", pairCode: "C", expiresAt: 1 })),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		await startPairing("tok", null);
+		await startPairing("tok", null, true);
+
+		expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).not.toHaveProperty("replace");
+		expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).replace).toBe(true);
+	});
+});
+
+describe("leaveSync", () => {
+	it("deletes this device, authenticated by its own token", async () => {
+		const fetchMock = stubFetch({ ok: true });
+		await leaveSync("tok");
+
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe("/api/sync/device");
+		expect(init.method).toBe("DELETE");
+		expect(init.headers.Authorization).toBe("Bearer tok");
 	});
 });
 

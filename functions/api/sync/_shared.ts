@@ -84,6 +84,31 @@ export function randomId(): string {
 	return crypto.randomUUID();
 }
 
+// Enforced by the device_group_limit trigger (migrations/0002); the endpoints
+// check it too, but only to answer with a useful message before the trigger
+// would refuse.
+export const MAX_DEVICES_PER_GROUP = 2;
+export const GROUP_FULL_MESSAGE =
+	"This sync group already has two devices. On one of them, choose " +
+	"Add another device and replace the other, or unpair one first.";
+
+// The trigger's RAISE message, as it surfaces in D1's error.
+export function isGroupFullError(err: unknown): boolean {
+	return err instanceof Error && err.message.includes("sync group full");
+}
+
+export async function countDevices(
+	ctx: SyncContext,
+	groupId: string,
+): Promise<number> {
+	const row = await ctx.env.DB.prepare(
+		"SELECT COUNT(*) AS n FROM device WHERE group_id = ?",
+	)
+		.bind(groupId)
+		.first<{ n: number }>();
+	return row?.n ?? 0;
+}
+
 export interface DeviceRow {
 	id: string;
 	group_id: string;

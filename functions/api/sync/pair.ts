@@ -1,10 +1,13 @@
 import {
 	authenticate,
 	bearerToken,
+	countDevices,
+	GROUP_FULL_MESSAGE,
 	json,
 	jsonError,
 	randomId,
 	randomPairCode,
+	MAX_DEVICES_PER_GROUP,
 	randomToken,
 	readJson,
 	sha256Hex,
@@ -17,6 +20,10 @@ const CODE_TTL_MS = 5 * 60 * 1000;
 
 interface PairBody {
 	lastReadAt?: string | null;
+	// Only for a device already in a full group: unpair the group's other
+	// device so this code has a place to go. That device may be lost or wiped,
+	// with no way to unpair itself, and only a member of the group can ask.
+	replace?: boolean;
 }
 
 // Starts a pairing. Two paths, and which one runs is the whole point of this
@@ -31,12 +38,21 @@ interface PairBody {
 export async function onRequestPost(ctx: SyncContext): Promise<Response> {
 	const now = Date.now();
 	const device = await authenticate(ctx);
+	const body = await readJson<PairBody>(ctx.request);
 
 	let groupId: string;
 	let deviceToken: string | undefined;
 
 	if (device !== null) {
 		groupId = device.group_id;
+		// Checked here so a full group never gets a code that can only fail at
+		// /claim. Racy on its own; the trigger is what holds the limit.
+		if ((await countDevices(ctx, groupId)) >= MAX_DEVICES_PER_GROUP) {
+			if (body?.replace !== true) return jsonError(GROUP_FULL_MESSAGE, 409);
+			await ctx.env.DB.prepare("DELETE FROM device WHERE group_id = ? AND id != ?")
+				.bind(groupId, device.id)
+				.run();
+		}
 	} else {
 		// A token that was sent but didn't resolve is an error, not a new user.
 		// Falling through to "create a group" would silently strand a device
@@ -46,7 +62,6 @@ export async function onRequestPost(ctx: SyncContext): Promise<Response> {
 			return jsonError("Unknown device token.", 401);
 		}
 
-		const body = await readJson<PairBody>(ctx.request);
 		groupId = randomId();
 		await ctx.env.DB.prepare(
 			"INSERT INTO sync_group (id, last_read_at, updated_at, created_at) VALUES (?, ?, ?, ?)",

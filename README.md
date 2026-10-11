@@ -17,6 +17,7 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 - Unread count in the tab title
 - Unsubscribe from one of your own feeds with the × beside it in the feed list (curated feeds can't be removed). A Refresh button refetches every feed without reloading the page
 - Favourites: ♡ a post to keep its title and link after it's read, in a separate Favourites view (newest first). Per device — not synced
+- Sync between **two devices** (pair with a code or QR). Unpair frees a device's place; when the group is full, Add another device offers to replace the other one — the way back from a lost or reinstalled device. The limit is a database trigger (`migrations/0002_device_limit.sql`), so concurrent joins can't exceed it
 
 ## Goals
 
@@ -62,7 +63,7 @@ After editing anything under `scripts/icons/`, run `bash scripts/generate-icons.
 `android/` is a native Kotlin app (Jetpack Compose, Material 3) modelled on [Read You](https://github.com/Ashinch/ReadYou): a feeds page and the unified unread list. Posts open in the browser (a Custom Tab; long-press → Open in browser for a full tab in the default browser), as they do on the web. It follows the web app's rules and joins the same sync group:
 
 - **Same read model.** One `lastReadAt` watermark, earliest unread first, opening the next unread post advances it, ✓ marks read up to a post. The decisions are ported from `src/lib` into `android/app/src/main/kotlin/.../core/`, and the TS tests are ported alongside them, reading the same fixtures from `src/lib/__fixtures__`
-- **Same sync.** Pairs through `/api/sync` (Settings → Set up sync / Join with a code) and shares the watermark and personal feeds with the web app and other devices. Pairing codes and QR links are interchangeable between the two
+- **Same sync.** Pairs through `/api/sync` (Settings → Set up sync / Join with a code) and shares the watermark and personal feeds with the web app or another device (two per group). Pairing codes and QR links are interchangeable between the two
 - **Same curated list.** Fetched live from the deployed `curated-feeds.opml` each refresh; the copy bundled at build time (copied from `public/`) covers the first offline launch
 - **Feeds fetched directly**, not through `/api/feed` — there's no CORS in an app
 - **The one difference: a list cache.** Unread posts' title, link and date are kept in a local Room database, so whatever a background refresh found is listed at launch. No post bodies — reading is online, in the browser. A read post stays listed, greyed, until the next refresh or cold launch drops it

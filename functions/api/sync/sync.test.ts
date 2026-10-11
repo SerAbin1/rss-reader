@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { onRequestPost as claim } from "./claim";
+import { onRequestDelete as leave } from "./device";
 import { fakeDb, sqlFor, type Reply } from "./_fake-db";
 import {
 	onRequestGet as feedsGet,
@@ -22,6 +23,19 @@ function post(body?: unknown, token?: string): Request {
 		headers: token ? { Authorization: `Bearer ${token}` } : {},
 		body: body === undefined ? undefined : JSON.stringify(body),
 	});
+}
+
+function del(token?: string): Request {
+	return new Request("http://localhost/api/sync/device", {
+		method: "DELETE",
+		headers: token ? { Authorization: `Bearer ${token}` } : {},
+	});
+}
+
+// Answers the device-count query with `n`.
+function devices(n: number, extra: (sql: string) => Reply = () => ({})) {
+	return (sql: string): Reply =>
+		sql.includes("COUNT(*) AS n FROM device") ? { first: { n } } : extra(sql);
 }
 
 function get(token?: string): Request {
@@ -103,6 +117,37 @@ describe("pair", () => {
 			calls.indexOf(sqlFor(calls, "INSERT INTO pair_code")!),
 		);
 	});
+
+	it("409s for a full group instead of issuing a code that can only fail", async () => {
+		const { db, calls } = fakeDb(authed(devices(2)));
+		const res = await pair({ request: post({}, "tok"), env: { DB: db } });
+
+		expect(res.status).toBe(409);
+		expect(sqlFor(calls, "INSERT INTO pair_code")).toBeUndefined();
+		expect(sqlFor(calls, "DELETE FROM device")).toBeUndefined();
+	});
+
+	it("replaces the group's other device when asked, then issues the code", async () => {
+		// The way back from a lost or wiped phone, whose row would otherwise
+		// hold the second place in the group for ever.
+		const { db, calls } = fakeDb(authed(devices(2)));
+		const res = await pair({ request: post({ replace: true }, "tok"), env: { DB: db } });
+
+		expect(res.status).toBe(200);
+		const removal = sqlFor(calls, "DELETE FROM device");
+		// Everyone in the group except the caller — never the caller itself.
+		expect(removal?.sql).toContain("group_id = ? AND id != ?");
+		expect(removal?.values).toEqual(["group-1", "device-1"]);
+		expect(calls.indexOf(removal!)).toBeLessThan(
+			calls.indexOf(sqlFor(calls, "INSERT INTO pair_code")!),
+		);
+	});
+
+	it("ignores replace while the group still has room", async () => {
+		const { db, calls } = fakeDb(authed(devices(1)));
+		await pair({ request: post({ replace: true }, "tok"), env: { DB: db } });
+		expect(sqlFor(calls, "DELETE FROM device")).toBeUndefined();
+	});
 });
 
 describe("claim", () => {
@@ -170,9 +215,64 @@ describe("claim", () => {
 		]);
 	});
 
+	it("409s for a full group and leaves the code unspent", async () => {
+		const { db, calls } = fakeDb(
+			devices(2, (sql) => (sql.includes("FROM pair_code") ? { first: live } : {})),
+		);
+		const res = await claim({ request: post({ code: "X" }), env: { DB: db } });
+
+		expect(res.status).toBe(409);
+		// Unspent, so the same code works once a place is freed.
+		expect(sqlFor(calls, "UPDATE pair_code")).toBeUndefined();
+	});
+
+	it("409s when the trigger refuses a join that raced past the count", async () => {
+		const { db } = fakeDb(
+			devices(1, (sql) => {
+				if (sql.includes("INSERT INTO device")) {
+					throw new Error("D1_ERROR: sync group full: SQLITE_CONSTRAINT");
+				}
+				return sql.includes("FROM pair_code") ? { first: live } : {};
+			}),
+		);
+		const res = await claim({ request: post({ code: "X" }), env: { DB: db } });
+		const body = await res.json();
+
+		expect(res.status).toBe(409);
+		expect(body.deviceToken).toBeUndefined();
+	});
+
 	it("accepts a code typed in lower case with the display hyphen left in", async () => {
 		expect(normalizePairCode("abcde-fghjk")).toBe("ABCDEFGHJK");
 		expect(normalizePairCode(randomPairCode())).toHaveLength(10);
+	});
+});
+
+describe("device (unpair)", () => {
+	it("401s without a valid token", async () => {
+		const { db } = fakeDb(() => ({ first: null }));
+		expect((await leave({ request: del("tok"), env: { DB: db } })).status).toBe(401);
+	});
+
+	it("deletes only the caller's own row", async () => {
+		const { db, calls } = fakeDb(authed(devices(1)));
+		const res = await leave({ request: del("tok"), env: { DB: db } });
+
+		expect(res.status).toBe(200);
+		expect(sqlFor(calls, "DELETE FROM device")?.values).toEqual(["device-1"]);
+		// Someone is still in the group, so it stays.
+		expect(sqlFor(calls, "DELETE FROM sync_group")).toBeUndefined();
+	});
+
+	it("removes the group with its last device", async () => {
+		const { db, calls } = fakeDb(authed(devices(0)));
+		await leave({ request: del("tok"), env: { DB: db } });
+
+		const order = ["DELETE FROM pair_code", "DELETE FROM feed", "DELETE FROM sync_group"]
+			.map((fragment) => calls.indexOf(sqlFor(calls, fragment)!));
+		expect(order.every((i) => i >= 0)).toBe(true);
+		// Children before the group, or the foreign keys refuse.
+		expect(order).toEqual([...order].sort((a, b) => a - b));
 	});
 });
 

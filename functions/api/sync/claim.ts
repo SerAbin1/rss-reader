@@ -1,7 +1,11 @@
 import { isPairCodeUsable } from "../../../src/lib/sync-state";
 import {
+	countDevices,
+	GROUP_FULL_MESSAGE,
+	isGroupFullError,
 	json,
 	jsonError,
+	MAX_DEVICES_PER_GROUP,
 	normalizePairCode,
 	randomId,
 	randomToken,
@@ -54,6 +58,12 @@ export async function onRequestPost(ctx: SyncContext): Promise<Response> {
 		return jsonError("That pairing code is not valid any more.", 410);
 	}
 
+	// Before the claim, so a full group leaves the code unspent: free a slot
+	// on the other device and the same code still works until it expires.
+	if ((await countDevices(ctx, code.group_id)) >= MAX_DEVICES_PER_GROUP) {
+		return jsonError(GROUP_FULL_MESSAGE, 409);
+	}
+
 	// The conditional UPDATE *is* the claim, and single-use rests on it rather
 	// than on the check above. Two devices scanning the same QR at once would
 	// both pass that check — read and write are separate round trips — but only
@@ -67,12 +77,19 @@ export async function onRequestPost(ctx: SyncContext): Promise<Response> {
 		return jsonError("That pairing code is not valid any more.", 410);
 	}
 
+	// The count above can race (two codes for one group, claimed at once);
+	// the device_group_limit trigger can't, and refuses the loser here.
 	const deviceToken = randomToken();
-	await ctx.env.DB.prepare(
-		"INSERT INTO device (id, group_id, token_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
-	)
-		.bind(randomId(), code.group_id, await sha256Hex(deviceToken), now, now)
-		.run();
+	try {
+		await ctx.env.DB.prepare(
+			"INSERT INTO device (id, group_id, token_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
+		)
+			.bind(randomId(), code.group_id, await sha256Hex(deviceToken), now, now)
+			.run();
+	} catch (err) {
+		if (isGroupFullError(err)) return jsonError(GROUP_FULL_MESSAGE, 409);
+		throw err;
+	}
 
 	// Hand back the group's current state in the same response, so the joining
 	// device converges immediately instead of showing its own stale view until

@@ -413,8 +413,8 @@ class Reader(
 
     // With no token this device becomes the group's first member and gets one
     // back; with one, it gets a fresh code for its existing group.
-    suspend fun startPairing(): PairResponse {
-        val result = sync.startPairing(prefs.deviceToken(), prefs.lastReadAt())
+    suspend fun startPairing(replace: Boolean = false): PairResponse {
+        val result = sync.startPairing(prefs.deviceToken(), prefs.lastReadAt(), replace)
         result.deviceToken?.let {
             prefs.setDeviceToken(it)
             remoteWatermark = null
@@ -429,7 +429,17 @@ class Reader(
         scope.launch { refresh() }
     }
 
+    // Leaves on the server first, so the group's place is actually freed, and
+    // only then forgets the token. A 401 means the server already let this
+    // device go (replaced from the other one): nothing left to free.
     suspend fun unpair() {
+        prefs.deviceToken()?.let { token ->
+            try {
+                sync.leave(token)
+            } catch (e: SyncException) {
+                if (e.status != 401) throw e
+            }
+        }
         prefs.setDeviceToken(null)
         feedsReconciled = false
         remoteWatermark = null

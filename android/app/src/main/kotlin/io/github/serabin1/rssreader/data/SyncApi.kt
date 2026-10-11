@@ -34,6 +34,8 @@ data class PairResponse(
 )
 
 @Serializable private data class WatermarkBody(val lastReadAt: String? = null)
+@Serializable private data class PairBody(val lastReadAt: String? = null, val replace: Boolean? = null)
+@Serializable private data class OkBody(val ok: Boolean = true)
 @Serializable private data class FeedsBody(val feeds: List<SyncedFeed>)
 @Serializable private data class FeedChange(val feedUrl: String, val title: String? = null, val deleted: Boolean? = null)
 @Serializable private data class FeedChangesBody(val feeds: List<FeedChange>)
@@ -71,20 +73,37 @@ class SyncApi(private val client: OkHttpClient, private val origin: String) {
 
     // The token is optional here: pairing is how a device gets one. With none,
     // the server creates a group seeded with this device's watermark.
-    suspend fun startPairing(token: String?, lastReadAt: Long?): PairResponse =
-        call("pair", token, json.encodeToString(WatermarkBody(lastReadAt?.let(IsoTimestamp::format))))
+    // A group holds two devices; a full one answers 409, and asking again with
+    // `replace` unpairs the group's other device to make room.
+    suspend fun startPairing(token: String?, lastReadAt: Long?, replace: Boolean = false): PairResponse =
+        call(
+            "pair",
+            token,
+            json.encodeToString(PairBody(lastReadAt?.let(IsoTimestamp::format), replace.takeIf { it })),
+        )
+
+    // Removes this device from its group on the server, freeing its place.
+    suspend fun leave(token: String) {
+        call<OkBody>("device", token, method = "DELETE")
+    }
 
     // Unauthenticated by design — the code is the credential, spent by this call.
     suspend fun claim(code: String): String =
         call<ClaimResponse>("claim", token = null, body = json.encodeToString(ClaimBody(code))).deviceToken
             ?: throw SyncException("sync/claim returned no token", 500)
 
-    private suspend inline fun <reified T> call(path: String, token: String?, body: String? = null): T =
+    private suspend inline fun <reified T> call(
+        path: String,
+        token: String?,
+        body: String? = null,
+        method: String? = null,
+    ): T =
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url("$origin/api/sync/$path")
                 .apply { if (token != null) header("Authorization", "Bearer $token") }
                 .apply { if (body != null) post(body.toRequestBody(jsonType)) }
+                .apply { if (method != null) method(method, body?.toRequestBody(jsonType)) }
                 .build()
             val text = try {
                 client.newCall(request).execute().use { response ->
