@@ -1,17 +1,21 @@
 import QRCode from "qrcode";
 import {
+	deleteFavourite,
 	deleteFeeds,
+	type Favourite,
 	type Feed,
+	getFavourites,
 	getAllFeeds,
 	getDeviceToken,
 	getLastReadAt,
+	saveFavourite,
 	saveFeeds,
 	setDeviceToken,
 	setLastReadAt,
 } from "../lib/db";
 import { parseFeed, type ParsedFeed, type Post } from "../lib/feed-parser";
 import { parseOpml } from "../lib/opml";
-import { isOnline, onConnectivityChange, registerServiceWorker } from "../lib/pwa";
+import { isOnline, onConnectivityChange } from "../lib/connectivity";
 import { describeImport, normalizeFeedUrl, planAdditions } from "../lib/subscriptions";
 import {
 	pullFeeds,
@@ -22,6 +26,8 @@ import {
 } from "../lib/sync-client";
 import { formatPairCode, mergeWatermark } from "../lib/sync-state";
 import {
+	favouriteKey,
+	isListed,
 	isRead,
 	watermarkAfterClick,
 	watermarkAfterMarkUpTo,
@@ -65,11 +71,9 @@ const pairingExpiryEl =
 	document.querySelector<HTMLParagraphElement>("#pairing-expiry")!;
 const pairingDoneButton =
 	document.querySelector<HTMLButtonElement>("#pairing-done")!;
-
-// Registers the installed app's service worker (a no-op in dev — see lib/pwa).
-// /pair's script registers the same worker, so a first visit that lands there
-// from a scanned QR still ends up with a worker covering "/".
-registerServiceWorker();
+const refreshButton = document.querySelector<HTMLButtonElement>("#refresh-button")!;
+const unreadTab = document.querySelector<HTMLButtonElement>("#view-unread")!;
+const favouritesTab = document.querySelector<HTMLButtonElement>("#view-favourites")!;
 
 // Re-rendered on every connectivity change: the feed failures below say what
 // happened, and "Offline" says why, which is the part a user can't infer.
@@ -89,6 +93,13 @@ let currentFeeds: Feed[] = [];
 let curatedFeeds: Feed[] = [];
 let currentFeedTitleByUrl = new Map<string, string>();
 let lastReadAt: string | null = null;
+// The watermark as this load began (and as it settled after the sync pull).
+// Posts read before it aren't shown; posts read since stay, greyed out, until
+// the next load — see isListed.
+let listedAfter: string | null = null;
+// Favourites by favouriteKey, and which list is showing.
+let favourites = new Map<string, Favourite>();
+let view: "unread" | "favourites" = "unread";
 
 // Load progress, module-scoped so the push gate below can read the *final*
 // failure count rather than a provisional one.
@@ -121,6 +132,7 @@ let degradedBannerPrompted = false;
 let readWhileDegraded = false;
 
 function renderFeeds(feeds: Feed[]): void {
+	const curated = curatedUrls();
 	feedListEl.replaceChildren(
 		...feeds.map((feed) => {
 			const li = document.createElement("li");
@@ -138,15 +150,29 @@ function renderFeeds(feeds: Feed[]): void {
 			// Plain text until the feed's homepage is known — see rememberSiteUrl.
 			if (feed.siteUrl === undefined) {
 				li.append(feed.title);
-				return li;
+			} else {
+				const link = document.createElement("a");
+				link.href = feed.siteUrl;
+				link.textContent = feed.title;
+				link.target = "_blank";
+				link.rel = "noopener noreferrer";
+				li.append(link);
 			}
 
-			const link = document.createElement("a");
-			link.href = feed.siteUrl;
-			link.textContent = feed.title;
-			link.target = "_blank";
-			link.rel = "noopener noreferrer";
-			li.append(link);
+			// Your own feeds only: a curated feed ships with the site, so
+			// dropping one is an edit to curated-feeds.opml.
+			if (!curated.has(feed.feedUrl)) {
+				const removeButton = document.createElement("button");
+				removeButton.type = "button";
+				removeButton.className = "remove-feed";
+				removeButton.textContent = "×";
+				removeButton.title = `Unsubscribe from ${feed.title}`;
+				removeButton.setAttribute("aria-label", `Unsubscribe from ${feed.title}`);
+				removeButton.addEventListener("click", () => {
+					void removeFeed(feed);
+				});
+				li.append(removeButton);
+			}
 			return li;
 		}),
 	);
@@ -183,67 +209,162 @@ function rememberSiteUrl(feed: Feed, siteUrl: string | null): void {
 // `lastReadAt` rather than stored per-post — see src/lib/read-state.ts and the
 // Obsidian decision log.
 function renderPosts(): void {
-	// Read posts aren't dimmed, they're not rendered at all — `index` below is
-	// each post's position in the *full* currentPosts array (not the filtered
-	// list), since watermarkAfterClick's index semantics are defined against
-	// the full array.
-	const unread = currentPosts
+	if (view === "favourites") {
+		renderFavourites();
+		updateLoadStatus();
+		return;
+	}
+
+	// `index` is each post's position in the *full* currentPosts array (not
+	// the filtered list), since watermarkAfterClick's index semantics are
+	// defined against the full array.
+	const listed = currentPosts
 		.map((post, index) => ({ post, index }))
-		.filter(({ post }) => !isRead(post.publishedAt, lastReadAt));
+		.filter(({ post }) => isListed(post.publishedAt, listedAfter));
 
 	const now = new Date();
 	postListEl.replaceChildren(
-		...unread.map(({ post, index }) => {
-			const li = document.createElement("li");
-
-			const link = document.createElement("a");
-			link.href = post.link;
-			link.textContent = post.title;
-			link.target = "_blank";
-			link.rel = "noopener noreferrer";
-			link.addEventListener("click", () => {
+		...listed.map(({ post, index }) => {
+			const read = isRead(post.publishedAt, lastReadAt);
+			const li = postItem(post, currentFeedTitleByUrl.get(post.feedUrl) ?? post.feedUrl, now, () => {
 				const newLastReadAt = watermarkAfterClick(currentPosts, lastReadAt, index);
 				if (newLastReadAt !== null) {
 					void markRead(newLastReadAt);
 				}
 			});
-
-			const meta = document.createElement("span");
-			meta.className = "meta";
-
-			const feedName = document.createElement("span");
-			feedName.className = "feed-name";
-			feedName.textContent = currentFeedTitleByUrl.get(post.feedUrl) ?? post.feedUrl;
-
-			// The exact date stays one hover away once the label goes relative.
-			const date = document.createElement("time");
-			date.className = "date";
-			date.dateTime = post.publishedAt;
-			date.title = formatFullDate(new Date(post.publishedAt));
-			date.textContent = formatPostDate(post.publishedAt, now);
-
-			meta.append(feedName, date);
-
-			const body = document.createElement("div");
-			body.className = "post-body";
-			body.append(link, meta);
-
-			const markButton = document.createElement("button");
-			markButton.type = "button";
-			markButton.className = "mark-read";
-			markButton.textContent = "✓";
-			markButton.title = "Mark read up to here";
-			markButton.setAttribute("aria-label", `Mark read up to "${post.title}"`);
-			markButton.addEventListener("click", () => {
-				void markReadUpTo(post);
-			});
-
-			li.append(body, markButton);
+			// Read but not yet cleared: still there to find again, visibly done.
+			li.classList.toggle("read", read);
+			if (!read) {
+				const markButton = document.createElement("button");
+				markButton.type = "button";
+				markButton.className = "mark-read";
+				markButton.textContent = "✓";
+				markButton.title = "Mark read up to here";
+				markButton.setAttribute("aria-label", `Mark read up to "${post.title}"`);
+				markButton.addEventListener("click", () => {
+					void markReadUpTo(post);
+				});
+				li.append(markButton);
+			}
 			return li;
 		}),
 	);
 	updateLoadStatus();
 }
+
+// Newest first, like Read You's starred list: favourites are a collection
+// to come back to, not a queue to work through.
+function renderFavourites(): void {
+	const sorted = [...favourites.values()].sort((a, b) =>
+		b.publishedAt.localeCompare(a.publishedAt),
+	);
+	if (sorted.length === 0) {
+		const empty = document.createElement("li");
+		empty.className = "empty";
+		empty.textContent = "No favourites yet. ♡ a post to keep it here after it's read.";
+		postListEl.replaceChildren(empty);
+		return;
+	}
+	const now = new Date();
+	postListEl.replaceChildren(
+		...sorted.map((favourite) => {
+			// The same watermark rule as the main list: opening the very next
+			// unread post advances it, from wherever it's opened.
+			const index = currentPosts.findIndex(
+				(post) => favouriteKey(post) === favourite.key,
+			);
+			return postItem(favourite, favourite.feedTitle, now, () => {
+				if (index === -1) return;
+				const next = watermarkAfterClick(currentPosts, lastReadAt, index);
+				if (next !== null) void markRead(next);
+			});
+		}),
+	);
+}
+
+// One post row — link, feed · date, and the favourite toggle — shared by
+// both lists. The caller adds whatever else its list needs.
+function postItem(
+	post: Post,
+	feedTitle: string,
+	now: Date,
+	onOpen: () => void,
+): HTMLLIElement {
+	const li = document.createElement("li");
+
+	const link = document.createElement("a");
+	link.href = post.link;
+	link.textContent = post.title;
+	link.target = "_blank";
+	link.rel = "noopener noreferrer";
+	link.addEventListener("click", onOpen);
+
+	const meta = document.createElement("span");
+	meta.className = "meta";
+
+	const feedName = document.createElement("span");
+	feedName.className = "feed-name";
+	feedName.textContent = feedTitle;
+
+	// The exact date stays one hover away once the label goes relative.
+	const date = document.createElement("time");
+	date.className = "date";
+	date.dateTime = post.publishedAt;
+	date.title = formatFullDate(new Date(post.publishedAt));
+	date.textContent = formatPostDate(post.publishedAt, now);
+
+	meta.append(feedName, date);
+
+	const body = document.createElement("div");
+	body.className = "post-body";
+	body.append(link, meta);
+
+	const key = favouriteKey(post);
+	const isFavourite = favourites.has(key);
+	const favouriteButton = document.createElement("button");
+	favouriteButton.type = "button";
+	favouriteButton.className = "favourite";
+	favouriteButton.textContent = isFavourite ? "♥" : "♡";
+	favouriteButton.setAttribute("aria-pressed", String(isFavourite));
+	favouriteButton.title = isFavourite ? "Remove from favourites" : "Add to favourites";
+	favouriteButton.addEventListener("click", () => {
+		void toggleFavourite(post, feedTitle);
+	});
+
+	li.append(body, favouriteButton);
+	return li;
+}
+
+async function toggleFavourite(post: Post, feedTitle: string): Promise<void> {
+	const key = favouriteKey(post);
+	if (favourites.has(key)) {
+		favourites.delete(key);
+		await deleteFavourite(key);
+	} else {
+		const favourite: Favourite = {
+			key,
+			feedTitle,
+			feedUrl: post.feedUrl,
+			guid: post.guid,
+			title: post.title,
+			link: post.link,
+			publishedAt: post.publishedAt,
+		};
+		favourites.set(key, favourite);
+		await saveFavourite(favourite);
+	}
+	renderPosts();
+}
+
+function showView(next: "unread" | "favourites"): void {
+	view = next;
+	unreadTab.setAttribute("aria-pressed", String(next === "unread"));
+	favouritesTab.setAttribute("aria-pressed", String(next === "favourites"));
+	renderPosts();
+}
+
+unreadTab.addEventListener("click", () => showView("unread"));
+favouritesTab.addEventListener("click", () => showView("favourites"));
 
 async function markRead(publishedAt: string): Promise<void> {
 	if (feedErrors.size > 0) readWhileDegraded = true;
@@ -453,15 +574,9 @@ function updateLoadStatus(): void {
 	showUnreadCount(unreadCount);
 }
 
-// The tab title, and the icon badge when installed — so the count is visible
-// without switching to the app. setAppBadge is absent outside installed PWAs
-// on some browsers, and rejects rather than throws when it can't badge.
+// The tab title, so the count is visible without switching to the tab.
 function showUnreadCount(count: number): void {
 	document.title = count > 0 ? `(${count}) RSS Reader` : "RSS Reader";
-	if ("setAppBadge" in navigator) {
-		const update = count > 0 ? navigator.setAppBadge(count) : navigator.clearAppBadge();
-		update.catch(() => {});
-	}
 }
 
 // The failure count, expandable into the list of failed feeds with a way to
@@ -579,6 +694,7 @@ async function removeFeed(feed: Feed): Promise<void> {
 
 	currentFeeds = currentFeeds.filter((existing) => existing.feedUrl !== feed.feedUrl);
 	currentPosts = currentPosts.filter((post) => post.feedUrl !== feed.feedUrl);
+	renderAllFeeds();
 	// It counted towards this load's progress as a settled feed; it no longer
 	// counts at all.
 	if (feedErrors.delete(feed.feedUrl)) {
@@ -608,6 +724,7 @@ async function loadPosts(feeds: Feed[]): Promise<void> {
 	}
 
 	lastReadAt = await getLastReadAt();
+	listedAfter = lastReadAt;
 	renderPosts();
 	await loadInto(feeds);
 }
@@ -733,6 +850,20 @@ async function loadCuratedFeeds(): Promise<Feed[]> {
 }
 
 async function refresh(): Promise<void> {
+	refreshButton.disabled = true;
+	try {
+		await refreshOnce();
+	} finally {
+		refreshButton.disabled = false;
+	}
+}
+
+refreshButton.addEventListener("click", () => {
+	void refresh();
+});
+
+async function refreshOnce(): Promise<void> {
+	favourites = new Map((await getFavourites()).map((f) => [f.key, f]));
 	syncToken = await getDeviceToken();
 	updateSyncSetupButton();
 	feedsReconciled = false;
@@ -780,6 +911,10 @@ async function refresh(): Promise<void> {
 	if (syncToken !== null) {
 		await pullWatermarkIntoLocal(syncToken);
 		await pushWatermarkIfAllowed();
+		// Posts another device read are dropped here, as at the start of a
+		// load, rather than lingering greyed out.
+		listedAfter = lastReadAt;
+		renderPosts();
 	}
 }
 

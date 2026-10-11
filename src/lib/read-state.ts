@@ -44,3 +44,17 @@ export function watermarkAfterMarkUpTo(
 	if (lastReadAt !== null && publishedAt <= lastReadAt) return null;
 	return publishedAt;
 }
+
+// Whether a post is still shown. A post read during this load stays listed,
+// greyed out, rather than vanishing the moment it's opened; it's dropped on
+// the next load. `listedAfter` is the watermark as that load began (and as it
+// settled after pulling from sync), so posts read before then are gone.
+export function isListed(publishedAt: string, listedAfter: string | null): boolean {
+	return !isRead(publishedAt, listedAfter);
+}
+
+// The identity a favourite is stored under: a guid is only unique within its
+// own feed.
+export function favouriteKey(post: { feedUrl: string; guid: string }): string {
+	return `${post.feedUrl}\u0000${post.guid}`;
+}

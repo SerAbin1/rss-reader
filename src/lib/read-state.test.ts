@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	favouriteKey,
 	findFirstUnreadIndex,
+	isListed,
 	isRead,
 	watermarkAfterMarkUpTo,
 	watermarkAfterClick,
@@ -81,5 +83,26 @@ describe("watermarkAfterMarkUpTo", () => {
 		expect(
 			watermarkAfterMarkUpTo(posts[1].publishedAt, posts[1].publishedAt),
 		).toBeNull();
+	});
+});
+
+describe("isListed", () => {
+	it("lists everything when nothing was read before this load", () => {
+		expect(isListed(posts[0].publishedAt, null)).toBe(true);
+	});
+
+	it("keeps posts read during this load, drops ones read before it", () => {
+		// The load began with posts[0] read; posts[1] was read since.
+		const listedAfter = posts[0].publishedAt;
+		expect(isListed(posts[0].publishedAt, listedAfter)).toBe(false);
+		expect(isListed(posts[1].publishedAt, listedAfter)).toBe(true);
+	});
+});
+
+describe("favouriteKey", () => {
+	it("tells apart equal guids from different feeds", () => {
+		expect(favouriteKey({ feedUrl: "https://a.com/f", guid: "1" })).not.toBe(
+			favouriteKey({ feedUrl: "https://b.com/f", guid: "1" }),
+		);
 	});
 });

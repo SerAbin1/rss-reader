@@ -2,7 +2,7 @@
 <opml version="2.0">
   <head>
     <title>Read You</title>
-    <dateCreated>Mon Sep 28 19:58:29 GMT+05:30 2026</dateCreated>
+    <dateCreated>Sun Oct 11 13:42:08 GMT+05:30 2026</dateCreated>
   </head>
   <body>
     <outline text="Default" title="Default">    <outline htmlUrl="https://www.seangoedecke.com/rss.xml" text="seangoedecke.com RSS feed" title="seangoedecke.com RSS feed" xmlUrl="https://www.seangoedecke.com/rss.xml" />
@@ -28,6 +28,7 @@
     <outline htmlUrl="https://lalitm.com/articles/index.xml" text="Lalit Maganti (Articles only)" title="Lalit Maganti (Articles only)" xmlUrl="https://lalitm.com/articles/index.xml" />
     <outline htmlUrl="https://against-the-grain.blog/rss" text="Against the Grain" title="Against the Grain" xmlUrl="https://against-the-grain.blog/rss" />
     <outline htmlUrl="https://lovethepenguin.com/rss" text="Love The Penguin" title="Love The Penguin" xmlUrl="https://lovethepenguin.com/rss" />
+    <outline htmlUrl="https://tdd.cat/rss.xml" text="The Daily Diff | Curated by Arpit Bhayani" title="The Daily Diff | Curated by Arpit Bhayani" xmlUrl="https://tdd.cat/rss.xml" />
 </outline>
     <outline text="Dev" title="Dev">    <outline htmlUrl="https://dave.cheney.net/feed" text="Dave Cheney" title="Dave Cheney" xmlUrl="https://dave.cheney.net/feed" />
     <outline htmlUrl="https://blog.acolyer.org/feed/" text="the morning paper" title="the morning paper" xmlUrl="https://blog.acolyer.org/feed/" />

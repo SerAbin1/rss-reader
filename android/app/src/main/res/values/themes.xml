@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the window before Compose draws; everything else is Material 3 in Compose. -->
+    <style name="Theme.RssReader" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

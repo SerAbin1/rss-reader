@@ -1,3 +1,5 @@
+import type { Post } from "./feed-parser";
+
 export interface Feed {
 	feedUrl: string;
 	title: string;
@@ -9,8 +11,9 @@ export interface Feed {
 }
 
 const DB_NAME = "rss-reader";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const FEEDS_STORE = "feeds";
+const FAVOURITES_STORE = "favourites";
 const META_STORE = "meta";
 const LAST_READ_AT_KEY = "lastReadAt";
 const DEVICE_TOKEN_KEY = "deviceToken";
@@ -23,6 +26,9 @@ function openDb(): Promise<IDBDatabase> {
 			const db = request.result;
 			if (!db.objectStoreNames.contains(FEEDS_STORE)) {
 				db.createObjectStore(FEEDS_STORE, { keyPath: "feedUrl" });
+			}
+			if (!db.objectStoreNames.contains(FAVOURITES_STORE)) {
+				db.createObjectStore(FAVOURITES_STORE, { keyPath: "key" });
 			}
 			if (!db.objectStoreNames.contains(META_STORE)) {
 				// Out-of-line keys: just scalar values (e.g. lastReadAt), not
@@ -117,6 +123,45 @@ export async function setDeviceToken(token: string): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(META_STORE, "readwrite");
 		tx.objectStore(META_STORE).put(token, DEVICE_TOKEN_KEY);
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
+	});
+}
+
+// A favourited post, kept as a copy rather than a reference: the live list is
+// refetched every load and drops read posts, and the feed itself may be
+// unsubscribed later, so a favourite has to carry everything it shows. Local
+// to this device — the sync protocol has no place for favourites.
+export interface Favourite extends Post {
+	key: string;
+	feedTitle: string;
+}
+
+export async function getFavourites(): Promise<Favourite[]> {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(FAVOURITES_STORE, "readonly");
+		const request = tx.objectStore(FAVOURITES_STORE).getAll();
+		request.onsuccess = () => resolve(request.result);
+		request.onerror = () => reject(request.error);
+	});
+}
+
+export async function saveFavourite(favourite: Favourite): Promise<void> {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(FAVOURITES_STORE, "readwrite");
+		tx.objectStore(FAVOURITES_STORE).put(favourite);
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
+	});
+}
+
+export async function deleteFavourite(key: string): Promise<void> {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(FAVOURITES_STORE, "readwrite");
+		tx.objectStore(FAVOURITES_STORE).delete(key);
 		tx.oncomplete = () => resolve();
 		tx.onerror = () => reject(tx.error);
 	});
