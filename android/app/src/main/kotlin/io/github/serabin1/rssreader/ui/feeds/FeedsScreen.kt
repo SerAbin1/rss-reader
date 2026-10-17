@@ -73,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.serabin1.rssreader.core.RelativeDate
+import io.github.serabin1.rssreader.data.FeedEntity
 import io.github.serabin1.rssreader.ui.common.FeedAvatar
 import io.github.serabin1.rssreader.ui.common.RefreshableBox
 import io.github.serabin1.rssreader.ui.common.openInBrowser
@@ -83,6 +84,7 @@ import io.github.serabin1.rssreader.ui.common.readerViewModel
 fun FeedsScreen(
     onOpenFlow: () -> Unit,
     onOpenFavourites: () -> Unit,
+    onOpenFeed: (FeedEntity) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val vm = readerViewModel { FeedsViewModel(it) }
@@ -165,13 +167,13 @@ fun FeedsScreen(
                 if (state.personal.isNotEmpty()) {
                     item { SectionHeader("Your feeds") }
                     items(state.personal, key = { it.feed.feedUrl }) { row ->
-                        FeedListRow(row, onRetry = vm::retry, onRemove = vm::remove)
+                        FeedListRow(row, onOpen = onOpenFeed, onRetry = vm::retry, onRemove = vm::remove)
                     }
                 }
                 if (state.curated.isNotEmpty()) {
                     item { SectionHeader("Curated") }
                     items(state.curated, key = { it.feed.feedUrl }) { row ->
-                        FeedListRow(row, onRetry = vm::retry, onRemove = null)
+                        FeedListRow(row, onOpen = onOpenFeed, onRetry = vm::retry, onRemove = null)
                     }
                 }
             }
@@ -277,12 +279,12 @@ private fun SectionHeader(text: String) {
     )
 }
 
-// Tap opens the site, as the feed list's links do on the web; long-press for
-// the rest. Curated feeds can't be removed — that's an edit to
+// Tap opens the feed's posts, as on the web; long-press for the rest,
+// including its site. Curated feeds can't be removed — that's an edit to
 // curated-feeds.opml — so they get no Remove.
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FeedListRow(row: FeedRow, onRetry: (String) -> Unit, onRemove: ((String) -> Unit)?) {
+private fun FeedListRow(row: FeedRow, onOpen: (FeedEntity) -> Unit, onRetry: (String) -> Unit, onRemove: ((String) -> Unit)?) {
     val context = LocalContext.current
     val feed = row.feed
     var menu by remember { mutableStateOf(false) }
@@ -291,7 +293,7 @@ private fun FeedListRow(row: FeedRow, onRetry: (String) -> Unit, onRemove: ((Str
     Box {
         ListItem(
             modifier = Modifier.combinedClickable(
-                onClick = { openInBrowser(context, feed.siteUrl ?: feed.feedUrl) },
+                onClick = { onOpen(feed) },
                 onLongClick = { menu = true },
             ),
             leadingContent = { FeedAvatar(feed.title) },

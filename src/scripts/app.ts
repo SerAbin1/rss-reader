@@ -79,6 +79,7 @@ const pairingDoneButton =
 const refreshButton = document.querySelector<HTMLButtonElement>("#refresh-button")!;
 const unreadTab = document.querySelector<HTMLButtonElement>("#view-unread")!;
 const favouritesTab = document.querySelector<HTMLButtonElement>("#view-favourites")!;
+const feedTab = document.querySelector<HTMLButtonElement>("#view-feed")!;
 
 // Re-rendered on every connectivity change: the feed failures below say what
 // happened, and "Offline" says why, which is the part a user can't infer.
@@ -104,7 +105,9 @@ let lastReadAt: string | null = null;
 let listedAfter: string | null = null;
 // Favourites by favouriteKey, and which list is showing.
 let favourites = new Map<string, Favourite>();
-let view: "unread" | "favourites" = "unread";
+let view: "unread" | "favourites" | "feed" = "unread";
+// The feed whose posts the "feed" view shows.
+let viewedFeedUrl: string | null = null;
 
 // Load progress, module-scoped so the push gate below can read the *final*
 // failure count rather than a provisional one.
@@ -152,13 +155,21 @@ function renderFeeds(feeds: Feed[]): void {
 				li.append(mark);
 			}
 
-			// Plain text until the feed's homepage is known — see rememberSiteUrl.
-			if (feed.siteUrl === undefined) {
-				li.append(feed.title);
-			} else {
+			const openButton = document.createElement("button");
+			openButton.type = "button";
+			openButton.className = "feed-open";
+			openButton.textContent = feed.title;
+			openButton.addEventListener("click", () => showFeed(feed));
+			li.append(openButton);
+
+			// Only once the feed's homepage is known — see rememberSiteUrl.
+			if (feed.siteUrl !== undefined) {
 				const link = document.createElement("a");
 				link.href = feed.siteUrl;
-				link.textContent = feed.title;
+				link.className = "site-link";
+				link.textContent = "↗";
+				link.title = `Open ${feed.title}'s site`;
+				link.setAttribute("aria-label", `Open ${feed.title}'s site`);
 				link.target = "_blank";
 				link.rel = "noopener noreferrer";
 				li.append(link);
@@ -216,6 +227,11 @@ function rememberSiteUrl(feed: Feed, siteUrl: string | null): void {
 function renderPosts(): void {
 	if (view === "favourites") {
 		renderFavourites();
+		updateLoadStatus();
+		return;
+	}
+	if (view === "feed" && viewedFeedUrl !== null) {
+		renderFeedPosts(viewedFeedUrl);
 		updateLoadStatus();
 		return;
 	}
@@ -287,8 +303,37 @@ function renderFavourites(): void {
 	);
 }
 
+// Newest first, read posts included: everything this load fetched from the
+// feed, to browse rather than work through. Unlike the unread list, nothing
+// here is hidden by listedAfter.
+function renderFeedPosts(feedUrl: string): void {
+	const listed = currentPosts
+		.map((post, index) => ({ post, index }))
+		.filter(({ post }) => post.feedUrl === feedUrl)
+		.reverse();
+	if (listed.length === 0) {
+		const empty = document.createElement("li");
+		empty.className = "empty";
+		empty.textContent = feedErrors.get(feedUrl) ?? "No posts loaded from this feed yet.";
+		postListEl.replaceChildren(empty);
+		return;
+	}
+	const now = new Date();
+	postListEl.replaceChildren(
+		...listed.map(({ post, index }) => {
+			// The same watermark rule as the main list.
+			const li = postItem(post, currentFeedTitleByUrl.get(feedUrl) ?? feedUrl, now, () => {
+				const next = watermarkAfterClick(currentPosts, lastReadAt, index);
+				if (next !== null) void markRead(next);
+			});
+			li.classList.toggle("read", isRead(post.publishedAt, lastReadAt));
+			return li;
+		}),
+	);
+}
+
 // One post row — link, feed · date, and the favourite toggle — shared by
-// both lists. The caller adds whatever else its list needs.
+// every list. The caller adds whatever else its list needs.
 function postItem(
 	post: Post,
 	feedTitle: string,
@@ -361,11 +406,20 @@ async function toggleFavourite(post: Post, feedTitle: string): Promise<void> {
 	renderPosts();
 }
 
-function showView(next: "unread" | "favourites"): void {
+function showView(next: typeof view): void {
 	view = next;
 	unreadTab.setAttribute("aria-pressed", String(next === "unread"));
 	favouritesTab.setAttribute("aria-pressed", String(next === "favourites"));
+	feedTab.hidden = next !== "feed";
 	renderPosts();
+}
+
+function showFeed(feed: Feed): void {
+	viewedFeedUrl = feed.feedUrl;
+	feedTab.textContent = feed.title;
+	showView("feed");
+	// The feed list sits below the posts, so its posts would load out of sight.
+	feedTab.scrollIntoView({ block: "start" });
 }
 
 unreadTab.addEventListener("click", () => showView("unread"));
@@ -753,7 +807,8 @@ async function removeFeed(feed: Feed): Promise<void> {
 		totalFeeds--;
 		settledFeeds--;
 	}
-	renderPosts();
+	if (viewedFeedUrl === feed.feedUrl && view === "feed") showView("unread");
+	else renderPosts();
 	feedErrorsChanged();
 }
 

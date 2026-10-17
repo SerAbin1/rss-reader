@@ -466,6 +466,24 @@ import SiteHead from "../components/SiteHead.astro";
 				text-decoration: underline;
 			}
 
+			.feed-open {
+				font: inherit;
+				color: inherit;
+				background: none;
+				border: none;
+				padding: 0;
+				cursor: pointer;
+			}
+
+			.feed-open:hover {
+				text-decoration: underline;
+			}
+
+			#feed-list .site-link {
+				color: var(--muted);
+				padding-left: 0.25rem;
+			}
+
 			#feed-list li.failed {
 				opacity: 0.6;
 				cursor: help;
@@ -656,6 +674,8 @@ import SiteHead from "../components/SiteHead.astro";
 			<nav class="view-tabs" aria-label="Posts">
 				<button id="view-unread" type="button" aria-pressed="true">Unread</button>
 				<button id="view-favourites" type="button" aria-pressed="false">Favourites</button>
+				<!-- The feed picked from the list below, while its posts are showing. -->
+				<button id="view-feed" type="button" aria-pressed="true" hidden></button>
 			</nav>
 			<ul id="post-list"></ul>
 		</main>

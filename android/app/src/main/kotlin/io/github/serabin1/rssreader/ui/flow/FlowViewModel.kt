@@ -31,7 +31,7 @@ data class ListedArticle(val row: ArticleRow, val read: Boolean, val dateLabel: 
 
 data class DaySection(val label: String, val articles: List<ListedArticle>)
 
-private fun sections(rows: List<ArticleRow>, isRead: (ArticleRow) -> Boolean): List<DaySection> {
+internal fun sections(rows: List<ArticleRow>, isRead: (ArticleRow) -> Boolean): List<DaySection> {
     val now = System.currentTimeMillis()
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)

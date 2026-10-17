@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import io.github.serabin1.rssreader.data.StartScreen
 import io.github.serabin1.rssreader.ui.feeds.FeedsScreen
+import io.github.serabin1.rssreader.ui.flow.FeedScreen
 import io.github.serabin1.rssreader.ui.flow.FlowScreen
 import io.github.serabin1.rssreader.ui.settings.SettingsScreen
 import kotlinx.serialization.Serializable
@@ -22,6 +23,7 @@ import kotlinx.serialization.Serializable
 // reader: posts open in the browser, as they do on the web.
 @Serializable data object FeedsRoute
 @Serializable data class FlowRoute(val favourites: Boolean = false)
+@Serializable data class FeedRoute(val feedUrl: String, val title: String)
 @Serializable data object SettingsRoute
 
 @Composable
@@ -53,6 +55,7 @@ fun ReaderNavHost(startScreen: StartScreen) {
             FeedsScreen(
                 onOpenFlow = { nav.navigate(FlowRoute()) },
                 onOpenFavourites = { nav.navigate(FlowRoute(favourites = true)) },
+                onOpenFeed = { nav.navigate(FeedRoute(it.feedUrl, it.title)) },
                 onOpenSettings = { nav.navigate(SettingsRoute) },
             )
         }
@@ -61,6 +64,10 @@ fun ReaderNavHost(startScreen: StartScreen) {
                 startWithFavourites = entry.toRoute<FlowRoute>().favourites,
                 onBack = { nav.popBackStack() },
             )
+        }
+        composable<FeedRoute> { entry ->
+            val route = entry.toRoute<FeedRoute>()
+            FeedScreen(route.feedUrl, route.title, onBack = { nav.popBackStack() })
         }
         composable<SettingsRoute> {
             SettingsScreen(onBack = { nav.popBackStack() })

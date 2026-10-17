@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.ConcurrentHashMap
 
 data class RefreshProgress(val settled: Int, val total: Int)
 
@@ -86,8 +87,22 @@ class Reader(
     val favourites: Flow<List<ArticleRow>> = articles.observeFavourites().distinctUntilChanged()
     val favouriteCount: Flow<Int> = articles.observeFavouriteCount().distinctUntilChanged()
 
-    suspend fun setFavourite(article: ArticleRow, favourite: Boolean) =
+    // A read post seen on a feed's page has no row, so it gets one first.
+    suspend fun setFavourite(article: ArticleRow, favourite: Boolean) {
+        articles.insertNew(
+            listOf(ArticleEntity(article.feedUrl, article.guid, article.feedTitle, article.title, article.link, article.publishedAt)),
+        )
         articles.setFavourite(article.feedUrl, article.guid, favourite)
+    }
+
+    // Each feed's posts as last fetched, read ones included, for the feed's
+    // own page. store() drops the read ones, so this is the only place they
+    // live. shortcut: memory only, so after a process restart the first open
+    // refetches; persist them if that wait shows up.
+    private val fetched = ConcurrentHashMap<String, List<Post>>()
+
+    suspend fun feedPosts(feedUrl: String): List<Post> =
+        fetched[feedUrl] ?: fetcher.fetch(feedUrl).posts.also { fetched[feedUrl] = it }
     val unreadCounts: Flow<List<FeedCount>> = lastReadAt.flatMapLatest { articles.observeUnreadCounts(after(it)) }.distinctUntilChanged()
     val refreshSettings: Flow<RefreshSettings> = prefs.refreshSettings
 
@@ -204,6 +219,7 @@ class Reader(
     // degraded.
     private suspend fun fetchOne(feed: FeedEntity, watermark: Long?): Boolean = try {
         val parsed = fetcher.fetch(feed.feedUrl)
+        fetched[feed.feedUrl] = parsed.posts
         store(feed.title, parsed.posts, watermark)
         feeds.markFetched(feed.feedUrl, parsed.siteUrl)
         true
@@ -228,6 +244,7 @@ class Reader(
         if (feedUrls.isEmpty()) return
         feeds.delete(feedUrls)
         articles.deleteForFeeds(feedUrls)
+        fetched.keys.removeAll(feedUrls.toSet())
     }
 
     // ---- Reading -----------------------------------------------------------
