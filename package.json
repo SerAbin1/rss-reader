@@ -1,34 +1,35 @@
 {
   "name": "rss-reader",
-  "type": "module",
   "version": "0.0.1",
-  "engines": {
-    "node": ">=22.12.0"
-  },
+  "type": "module",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vp test run",
+    "test:watch": "vp test",
     "pages:dev": "wrangler pages dev",
     "d1:migrate": "wrangler d1 migrations apply rss-reader-sync --local",
-    "d1:migrate:remote": "wrangler d1 migrations apply rss-reader-sync --remote"
+    "d1:migrate:remote": "wrangler d1 migrations apply rss-reader-sync --remote",
+    "prepare": "vp config"
   },
   "dependencies": {
     "astro": "^7.2.8",
     "qrcode": "^1.5.4"
   },
-  "allowScripts": {
-    "esbuild": true
-  },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11",
+    "vite-plus": "catalog:",
     "wrangler": "^4.127.0"
   },
-  "packageManager": "pnpm@12.4.1"
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "packageManager": "pnpm@12.4.1",
+  "allowScripts": {
+    "esbuild": true
+  }
 }

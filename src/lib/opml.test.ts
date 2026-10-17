@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { parseOpml } from "./opml";
 
 // Tried `readFileSync(new URL("./__fixtures__/sample.opml", import.meta.url))` first.
@@ -11,30 +11,30 @@ import { parseOpml } from "./opml";
 // result was `http://localhost:3000/...`, not a real file path. fileURLToPath + path.join
 // below bypass that global and resolve the path with plain Node APIs instead.
 const sampleOpml = readFileSync(
-	join(dirname(fileURLToPath(import.meta.url)), "__fixtures__/sample.opml"),
-	"utf-8",
+  join(dirname(fileURLToPath(import.meta.url)), "__fixtures__/sample.opml"),
+  "utf-8",
 );
 
 describe("parseOpml", () => {
-	it("flattens every feed out of nested OPML folders", () => {
-		const feeds = parseOpml(sampleOpml);
-		expect(feeds).toHaveLength(48);
-	});
+  it("flattens every feed out of nested OPML folders", () => {
+    const feeds = parseOpml(sampleOpml);
+    expect(feeds).toHaveLength(48);
+  });
 
-	it("extracts feedUrl and title for a given feed", () => {
-		const feeds = parseOpml(sampleOpml);
-		expect(feeds).toContainEqual({
-			feedUrl: "https://jvns.ca/atom.xml",
-			title: "Julia Evans",
-		});
-	});
+  it("extracts feedUrl and title for a given feed", () => {
+    const feeds = parseOpml(sampleOpml);
+    expect(feeds).toContainEqual({
+      feedUrl: "https://jvns.ca/atom.xml",
+      title: "Julia Evans",
+    });
+  });
 
-	it("skips folder outlines that have no xmlUrl", () => {
-		const feeds = parseOpml(sampleOpml);
-		expect(feeds.some((feed) => feed.title === "Films")).toBe(false);
-	});
+  it("skips folder outlines that have no xmlUrl", () => {
+    const feeds = parseOpml(sampleOpml);
+    expect(feeds.some((feed) => feed.title === "Films")).toBe(false);
+  });
 
-	it("throws on malformed XML", () => {
-		expect(() => parseOpml("<opml><body><outline")).toThrow();
-	});
+  it("throws on malformed XML", () => {
+    expect(() => parseOpml("<opml><body><outline")).toThrow();
+  });
 });
