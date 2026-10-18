@@ -7,36 +7,34 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CF_SEND_TELEMETRY: "false"
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v6
+      # Sets up Node and pnpm at the versions package.json pins, and runs
+      # `vp install` (frozen lockfile on CI).
+      - uses: voidzero-dev/setup-vp@v1.21.2
         with:
-          node-version: 24
-          cache: pnpm
+          cache: true
 
-      - run: pnpm install --frozen-lockfile
+      - run: vp test run
 
-      - run: pnpm test
+      - run: vp run build
 
-      - run: pnpm build
+      - run: vp exec cf build
 
       # Ahead of the deploy, not after: the new code expects the new schema, so
-      # applying it afterwards leaves a window where live requests 500.
+      # applying it afterwards leaves a window where live requests 500. cf
+      # takes the database's id, not its name (it's in wrangler.toml too).
       - name: Apply D1 migrations
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply rss-reader-sync --remote
+        run: vp exec cf d1 migrations apply fcf7783c-890c-4916-83b9-ef090885fc1d
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      # Project name and build output directory now come from wrangler.toml
-      # rather than being repeated here.
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy
+      - name: Deploy to Cloudflare Workers
+        run: vp exec cf deploy --prebuilt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

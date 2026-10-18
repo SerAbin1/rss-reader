@@ -9,9 +9,9 @@
     "astro": "astro",
     "test": "vp test run",
     "test:watch": "vp test",
-    "pages:dev": "wrangler pages dev",
-    "d1:migrate": "wrangler d1 migrations apply rss-reader-sync --local",
-    "d1:migrate:remote": "wrangler d1 migrations apply rss-reader-sync --remote",
+    "dev:worker": "cf dev",
+    "d1:migrate": "cf d1 migrations apply fcf7783c-890c-4916-83b9-ef090885fc1d --local",
+    "d1:migrate:remote": "cf d1 migrations apply fcf7783c-890c-4916-83b9-ef090885fc1d",
     "prepare": "vp config"
   },
   "dependencies": {
@@ -23,7 +23,7 @@
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:",
-    "wrangler": "^4.127.0"
+    "wrangler": "^4.151.1"
   },
   "devEngines": {
     "runtime": {
