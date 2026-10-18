@@ -10,6 +10,9 @@ export default defineConfig({
     // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
     // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
     clearMocks: false,
+    // Default to plain Node — real `fetch`/`Request`/`Response`, no DOM polyfill quirks.
+    // Files that need a DOM (e.g. `DOMParser`) opt in with a `// @vitest-environment jsdom` pragma.
+    environment: "node",
   },
   fmt: {},
   lint: {

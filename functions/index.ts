@@ -1,7 +1,6 @@
-// The Worker entry. On Pages the file layout under functions/ was the router;
+// The /api router. On Pages the file layout under functions/ was the router;
 // on Workers that's ours to do, so this table maps each path to the handlers
-// its file exports. Static assets never get here: wrangler.toml runs this
-// Worker first only for /api/*, and everything else is served from dist/.
+// its file exports. src/pages/api/[...path].ts hands every /api/* request here.
 import * as feed from "./api/feed";
 import * as claim from "./api/sync/claim";
 import * as device from "./api/sync/device";

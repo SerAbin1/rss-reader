@@ -4,7 +4,7 @@
 // database.
 //
 // It does NOT execute SQL, so it cannot tell you the queries are correct. That
-// is what `pnpm dev:worker` against local D1 is for.
+// is what `pnpm dev` against local D1 is for.
 
 import type { D1Database, D1RunResult } from "./_shared";
 

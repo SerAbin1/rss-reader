@@ -20,9 +20,9 @@ jobs:
 
       - run: vp test run
 
+      # Astro with the Cloudflare adapter: dist/client is the site, dist/server
+      # the Worker, and .wrangler/deploy/config.json points wrangler at both.
       - run: vp run build
-
-      - run: vp exec cf build
 
       # Ahead of the deploy, not after: the new code expects the new schema, so
       # applying it afterwards leaves a window where live requests 500. cf
@@ -33,8 +33,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # wrangler, not cf: `cf deploy` only takes cf's own build output, which
+      # the Astro adapter can't produce yet. Switch once it can.
       - name: Deploy to Cloudflare Workers
-        run: vp exec cf deploy --prebuilt
+        run: vp exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

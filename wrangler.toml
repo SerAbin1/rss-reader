@@ -5,7 +5,6 @@
 # runtime semantics. Both now read from here.
 
 name = "my-rss-reader"
-main = "functions/index.ts"
 
 # The Workers runtime gates breaking changes behind this date: it serves the
 # semantics as of the date declared here, so a runtime update can't change
@@ -21,8 +20,3 @@ binding = "DB"
 database_name = "rss-reader-sync"
 database_id = "fcf7783c-890c-4916-83b9-ef090885fc1d"
 
-# The built Astro site. Only /api/* reaches the Worker; every other path is
-# served from here.
-[assets]
-directory = "dist"
-run_worker_first = ["/api/*"]

@@ -9,17 +9,18 @@
     "astro": "astro",
     "test": "vp test run",
     "test:watch": "vp test",
-    "dev:worker": "cf dev",
-    "d1:migrate": "cf d1 migrations apply fcf7783c-890c-4916-83b9-ef090885fc1d --local",
+    "d1:migrate": "wrangler d1 migrations apply rss-reader-sync --local",
     "d1:migrate:remote": "cf d1 migrations apply fcf7783c-890c-4916-83b9-ef090885fc1d",
     "prepare": "vp config"
   },
   "dependencies": {
-    "astro": "^7.2.8",
+    "@astrojs/cloudflare": "^14.4.0",
+    "astro": "^7.4.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",
+    "cf": "1.0.0-beta.18",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:",

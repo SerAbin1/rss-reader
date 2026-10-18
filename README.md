@@ -27,14 +27,14 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 
 ```sh
 pnpm install
-pnpm dev        # start the Astro dev server (pages only — no /api/feed)
-pnpm build      # build the static site to dist/
-pnpm preview    # preview the production build locally (no /api/feed either)
-pnpm dev:worker # build first, then: serves dist/ + the Worker together, incl. /api/feed
+pnpm dev        # start the Astro dev server: pages + /api/* + local D1, in workerd
+pnpm build      # build to dist/: client/ (the site) and server/ (the Worker)
+pnpm preview    # preview the production build locally
+pnpm d1:migrate # apply migrations/ to the local D1 that `pnpm dev` uses
 pnpm test       # run the test suite
 ```
 
-`pnpm dev`/`pnpm preview` don't run the Worker — `/api/*` only exists under `pnpm dev:worker` (`cf dev`). Its entry is `functions/index.ts`, which routes `/api/*` to the handlers under `functions/api/`. Run `pnpm build` again after changing anything under `src/`, then re-run `pnpm dev:worker` to pick it up.
+The site is Astro on its Cloudflare adapter: pages are prerendered, and `src/pages/api/[...path].ts` runs on demand, handing every `/api/*` request to the router in `functions/index.ts` and the handlers under `functions/api/`.
 
 After editing anything under `scripts/icons/`, run `bash scripts/generate-icons.sh` and commit the regenerated files in `public/`.
 
@@ -52,4 +52,4 @@ Needs JDK 21 and the Android SDK (`android/local.properties` → `sdk.dir`). CI 
 
 ## Deployment
 
-Cloudflare Workers (static assets + the `/api/*` Worker), via GitHub Actions (`.github/workflows/deploy.yml`) rather than Cloudflare's native Git integration — every push to `main` runs `pnpm test` → `pnpm build` → `cf build` → D1 migrations → `cf deploy`, so a failing test blocks the deploy. Requires two repo secrets set under Settings → Secrets and variables → Actions: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. One-time Cloudflare account/project setup steps are in Obsidian (`BackEnd/DevOps/Deployment.md`), not reproduced here since they involve dashboard clicks, not code.
+Cloudflare Workers (static assets + the `/api/*` Worker), via GitHub Actions (`.github/workflows/deploy.yml`) rather than Cloudflare's native Git integration — every push to `main` runs `vp test run` → `vp run build` → D1 migrations (`cf`) → `wrangler deploy`, so a failing test blocks the deploy. Requires two repo secrets set under Settings → Secrets and variables → Actions: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. One-time Cloudflare account/project setup steps are in Obsidian (`BackEnd/DevOps/Deployment.md`), not reproduced here since they involve dashboard clicks, not code.
