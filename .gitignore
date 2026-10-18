@@ -10,7 +10,7 @@ node_modules/
 .env
 .env.production
 
-# wrangler local state (Miniflare cache/sqlite from `pnpm pages:dev`) and secrets
+# wrangler local state (Miniflare cache/sqlite from `pnpm dev`) and secrets
 .wrangler/
 .dev.vars
 .vitest/

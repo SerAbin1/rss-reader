@@ -28,7 +28,7 @@ android {
         // The web app's origin: home of the sync endpoints and the live curated
         // feed list. Feeds themselves are fetched directly — Android has no
         // CORS, so /api/feed is a web-only concern.
-        buildConfigField("String", "WEB_ORIGIN", "\"https://my-rss-reader.pages.dev\"")
+        buildConfigField("String", "WEB_ORIGIN", "\"https://my-rss-reader.serabin1.workers.dev\"")
     }
 
     // The release key exists only in CI secrets. Every published APK must carry
