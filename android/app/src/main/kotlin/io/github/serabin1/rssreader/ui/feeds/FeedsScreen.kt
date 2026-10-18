@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,12 +61,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -78,6 +81,28 @@ import io.github.serabin1.rssreader.ui.common.FeedAvatar
 import io.github.serabin1.rssreader.ui.common.RefreshableBox
 import io.github.serabin1.rssreader.ui.common.openInBrowser
 import io.github.serabin1.rssreader.ui.common.readerViewModel
+
+// Swiping across home is a shortcut to the two banners: left to right opens
+// Favourites, right to left opens Unread. Only a drag that starts out
+// horizontal is claimed, so the list still scrolls as before.
+@Composable
+private fun Modifier.swipeBetween(onRight: () -> Unit, onLeft: () -> Unit): Modifier {
+    val right by rememberUpdatedState(onRight)
+    val left by rememberUpdatedState(onLeft)
+    return pointerInput(Unit) {
+        val threshold = 96.dp.toPx()
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onDragEnd = {
+                when {
+                    total > threshold -> right()
+                    total < -threshold -> left()
+                }
+            },
+        ) { _, dragAmount -> total += dragAmount }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,7 +161,9 @@ fun FeedsScreen(
             modifier = Modifier.padding(padding),
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .swipeBetween(onRight = onOpenFavourites, onLeft = onOpenFlow),
                 contentPadding = PaddingValues(bottom = 96.dp),
             ) {
                 item { RefreshStatus(state) }

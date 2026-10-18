@@ -18,8 +18,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RssReader">
 
+        <!-- Predictive back off: targeting API 36 turns it on, and its
+             back-gesture preview animates even though the NavHost's own
+             transitions are None. Back should switch pages instantly. -->
         <activity
             android:name=".MainActivity"
+            android:enableOnBackInvokedCallback="false"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
