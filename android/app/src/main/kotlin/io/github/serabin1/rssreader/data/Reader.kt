@@ -466,7 +466,9 @@ class Reader(
 
     private companion object {
         const val TAG = "Reader"
-        const val FETCH_CONCURRENCY = 6
+        // Feeds are on different hosts, so this only caps parsing memory and
+        // the burst; a dead feed holds its slot for up to the 45s call timeout.
+        const val FETCH_CONCURRENCY = 50
     }
 }
 
