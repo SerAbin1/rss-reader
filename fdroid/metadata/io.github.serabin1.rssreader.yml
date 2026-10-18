@@ -1,0 +1,16 @@
+Categories:
+  - Reading
+License: MIT
+AuthorName: Abin Biju
+SourceCode: https://github.com/SerAbin1/rss-reader
+IssueTracker: https://github.com/SerAbin1/rss-reader/issues
+Changelog: https://github.com/SerAbin1/rss-reader/releases
+
+Name: RSS Reader
+Summary: A small RSS/Atom reader with one unified list
+Description: |-
+  Subscribe to feeds by URL or OPML import and read the latest posts from all
+  of them in one list. A curated feed list ships with the app.
+
+  Read state is a single "last read" watermark rather than per-post flags, and
+  can sync with one other device (web or Android) by pairing with a code or QR.

@@ -5,9 +5,21 @@ name: Android
 on:
   push:
     branches: [main]
-    paths: ["android/**", "src/lib/__fixtures__/**", "public/curated-feeds.opml", ".github/workflows/android.yml"]
+    paths:
+      [
+        "android/**",
+        "src/lib/__fixtures__/**",
+        "public/curated-feeds.opml",
+        ".github/workflows/android.yml",
+      ]
   pull_request:
-    paths: ["android/**", "src/lib/__fixtures__/**", "public/curated-feeds.opml", ".github/workflows/android.yml"]
+    paths:
+      [
+        "android/**",
+        "src/lib/__fixtures__/**",
+        "public/curated-feeds.opml",
+        ".github/workflows/android.yml",
+      ]
 
 jobs:
   test:
@@ -85,3 +97,13 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "Android $VERSION" \
             --notes "Built from $GITHUB_SHA: $(git log -1 --format=%s "$GITHUB_SHA")"
+
+  # Republishes the F-Droid repo so the new release shows up there too.
+  fdroid:
+    needs: release
+    uses: ./.github/workflows/fdroid.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    secrets: inherit

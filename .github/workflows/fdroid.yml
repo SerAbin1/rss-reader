@@ -1,0 +1,79 @@
+name: F-Droid repo
+
+# Rebuilds the self-hosted F-Droid repo on GitHub Pages from the newest GitHub
+# releases' APKs. Stateless: every run starts from scratch, and only the index
+# signing key carries over — its fingerprint is the repo's identity, so losing
+# it means everyone re-adds the repo. Called by android.yml after a release;
+# runnable by hand to republish without one.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+# One deploy at a time; a newer run supersedes a queued one.
+concurrency: fdroid-pages
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}repo
+    env:
+      FDROID_KEY_ALIAS: ${{ secrets.FDROID_KEY_ALIAS }}
+      FDROID_KEYSTORE_PASSWORD: ${{ secrets.FDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - run: pip install fdroidserver==2.4.5
+
+      # Built outside the checkout so nothing but repo/ can end up published —
+      # the keystore sits next to it.
+      - name: Assemble the repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::FDROID_KEYSTORE_BASE64 is not set; a new key would change the repo's fingerprint."
+            exit 1
+          fi
+          work="$RUNNER_TEMP/fdroid"
+          cp -r fdroid "$work"
+          chmod 600 "$work/config.yml"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$work/keystore.p12"
+          mkdir "$work/repo"
+          # The latest three, so a bad release can still be rolled back from
+          # the F-Droid client.
+          gh release list --limit 3 --json tagName --jq '.[].tagName' |
+            while read -r tag; do
+              gh release download "$tag" --pattern '*.apk' --dir "$work/repo"
+            done
+          echo "FDROID_WORK=$work" >> "$GITHUB_ENV"
+
+      - name: Build the index
+        working-directory: ${{ env.FDROID_WORK }}
+        run: fdroid update --pretty
+
+      - name: Print the repo link
+        working-directory: ${{ env.FDROID_WORK }}
+        run: |
+          fingerprint=$(keytool -exportcert -keystore keystore.p12 -alias "$FDROID_KEY_ALIAS" \
+            -storepass "$FDROID_KEYSTORE_PASSWORD" | sha256sum | cut -d' ' -f1 | tr a-f A-F)
+          echo "Add in F-Droid: https://serabin1.github.io/rss-reader/repo?fingerprint=$fingerprint" >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p "$RUNNER_TEMP/site"
+          mv repo "$RUNNER_TEMP/site/repo"
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

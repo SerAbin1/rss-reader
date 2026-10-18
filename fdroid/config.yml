@@ -1,0 +1,18 @@
+# fdroidserver config for the self-hosted repo published to GitHub Pages by
+# the fdroid job in .github/workflows/android.yml. Secrets come from the
+# environment; the keystore itself is restored from FDROID_KEYSTORE_BASE64.
+
+repo_url: https://serabin1.github.io/rss-reader/repo
+repo_name: RSS Reader
+repo_description: >-
+  Releases of RSS Reader, the Android app from github.com/SerAbin1/rss-reader,
+  signed with the same key as the APKs on its GitHub releases.
+
+repo_keyalias: { env: FDROID_KEY_ALIAS }
+keystore: keystore.p12
+keystorepass: { env: FDROID_KEYSTORE_PASSWORD }
+keypass: { env: FDROID_KEYSTORE_PASSWORD }
+keydname: CN=RSS Reader F-Droid repo, O=SerAbin1
+
+# Only the APKs the job downloads; older ones aren't kept anywhere.
+archive_older: 0
