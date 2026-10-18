@@ -7,8 +7,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      CF_SEND_TELEMETRY: "false"
     steps:
       - uses: actions/checkout@v6
 
