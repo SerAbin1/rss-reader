@@ -1,9 +1,9 @@
-name: F-Droid repo
+name: F-Droid release
 
 # Rebuilds the self-hosted F-Droid repo on GitHub Pages from the newest GitHub
 # releases' APKs. Stateless: every run starts from scratch, and only the index
 # signing key carries over — its fingerprint is the repo's identity, so losing
-# it means everyone re-adds the repo. Called by android.yml after a release;
+# it means everyone re-adds the repo. Called by android_gh_release.yml after a release;
 # runnable by hand to republish without one.
 on:
   workflow_call:

@@ -1,6 +1,6 @@
 # Single source of truth for the Cloudflare project. Previously these values
 # were split between the `pages:dev` flags in package.json (local) and the
-# `pages deploy` flags in .github/workflows/deploy.yml plus the Cloudflare
+# `pages deploy` flags in .github/workflows/web_deploy.yml plus the Cloudflare
 # dashboard (production) — so local and production could silently run different
 # runtime semantics. Both now read from here.
 

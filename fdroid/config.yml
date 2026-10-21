@@ -1,5 +1,5 @@
 # fdroidserver config for the self-hosted repo published to GitHub Pages by
-# the fdroid job in .github/workflows/android.yml. Secrets come from the
+# the fdroid job in .github/workflows/android_gh_release.yml. Secrets come from the
 # environment; the keystore itself is restored from FDROID_KEYSTORE_BASE64.
 
 repo_url: https://serabin1.github.io/rss-reader/repo
