@@ -1,5 +1,8 @@
 package io.github.serabin1.rssreader.ui.feeds
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -61,6 +64,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -74,6 +78,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.serabin1.rssreader.core.RelativeDate
 import io.github.serabin1.rssreader.data.FeedEntity
@@ -81,6 +86,7 @@ import io.github.serabin1.rssreader.ui.common.FeedAvatar
 import io.github.serabin1.rssreader.ui.common.RefreshableBox
 import io.github.serabin1.rssreader.ui.common.openInBrowser
 import io.github.serabin1.rssreader.ui.common.readerViewModel
+import kotlinx.coroutines.launch
 
 // Swiping across home is a shortcut to the two banners: left to right opens
 // Favourites, right to left opens Unread. Only a drag that starts out
@@ -125,6 +131,27 @@ fun FeedsScreen(
         uri ?: return@rememberLauncherForActivityResult
         context.contentResolver.openInputStream(uri)?.use { vm.importOpml(it.reader().readText()) }
         adding = false
+    }
+
+    val scope = rememberCoroutineScope()
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) scope.launch { snackbar.showSnackbar("Notifications are blocked. Allow them for Reader in system settings.") }
+    }
+    // The permission is asked for when a feed's notifications go on rather
+    // than at launch, so the request comes with an obvious reason. They're
+    // posted by background refresh, so with that off none would come.
+    val setNotify = { feedUrl: String, notify: Boolean ->
+        vm.setNotify(feedUrl, notify)
+        if (notify) {
+            if (!state.settings.background) {
+                scope.launch { snackbar.showSnackbar("Notifications come with background refresh, which is off in Settings.") }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     Scaffold(
@@ -194,13 +221,13 @@ fun FeedsScreen(
                 if (state.personal.isNotEmpty()) {
                     item { SectionHeader("Your feeds") }
                     items(state.personal, key = { it.feed.feedUrl }) { row ->
-                        FeedListRow(row, onOpen = onOpenFeed, onRetry = vm::retry, onRemove = vm::remove)
+                        FeedListRow(row, onOpen = onOpenFeed, onRetry = vm::retry, onSetNotify = setNotify, onRemove = vm::remove)
                     }
                 }
                 if (state.curated.isNotEmpty()) {
                     item { SectionHeader("Curated") }
                     items(state.curated, key = { it.feed.feedUrl }) { row ->
-                        FeedListRow(row, onOpen = onOpenFeed, onRetry = vm::retry, onRemove = null)
+                        FeedListRow(row, onOpen = onOpenFeed, onRetry = vm::retry, onSetNotify = setNotify, onRemove = null)
                     }
                 }
             }
@@ -311,7 +338,13 @@ private fun SectionHeader(text: String) {
 // curated-feeds.opml — so they get no Remove.
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FeedListRow(row: FeedRow, onOpen: (FeedEntity) -> Unit, onRetry: (String) -> Unit, onRemove: ((String) -> Unit)?) {
+private fun FeedListRow(
+    row: FeedRow,
+    onOpen: (FeedEntity) -> Unit,
+    onRetry: (String) -> Unit,
+    onSetNotify: (String, Boolean) -> Unit,
+    onRemove: ((String) -> Unit)?,
+) {
     val context = LocalContext.current
     val feed = row.feed
     var menu by remember { mutableStateOf(false) }
@@ -354,6 +387,11 @@ private fun FeedListRow(row: FeedRow, onOpen: (FeedEntity) -> Unit, onRetry: (St
             DropdownMenuItem(
                 text = { Text("Open site") },
                 onClick = { menu = false; openInBrowser(context, feed.siteUrl ?: feed.feedUrl) },
+            )
+            // Says the current state; choosing it switches to the other.
+            DropdownMenuItem(
+                text = { Text(if (feed.notify) "Notifications On" else "Notifications Off") },
+                onClick = { menu = false; onSetNotify(feed.feedUrl, !feed.notify) },
             )
             if (feed.lastError != null) {
                 DropdownMenuItem(text = { Text("Retry") }, onClick = { menu = false; onRetry(feed.feedUrl) })

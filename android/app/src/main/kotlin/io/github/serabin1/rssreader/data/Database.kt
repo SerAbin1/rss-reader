@@ -1,5 +1,7 @@
 package io.github.serabin1.rssreader.data
 
+import androidx.room.AutoMigration
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -24,6 +26,9 @@ data class FeedEntity(
     val curated: Boolean,
     // Why the last fetch failed; null once one succeeds.
     val lastError: String?,
+    // Whether a background refresh posts a notification for each new post.
+    // This device only — sync knows nothing of it.
+    @ColumnInfo(defaultValue = "0") val notify: Boolean = false,
 )
 
 // A list cache, not an offline store: just enough to show what a background
@@ -99,6 +104,12 @@ interface FeedDao {
         error: String,
     )
 
+    @Query("UPDATE feed SET notify = :notify WHERE feedUrl = :feedUrl")
+    suspend fun setNotify(
+        feedUrl: String,
+        notify: Boolean,
+    )
+
     @Query("SELECT COUNT(*) FROM feed WHERE lastError IS NOT NULL")
     suspend fun failedCount(): Int
 
@@ -108,8 +119,9 @@ interface FeedDao {
 
 @Dao
 interface ArticleDao {
+    // Row ids in input order, -1 where the post was already stored.
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertNew(articles: List<ArticleEntity>)
+    suspend fun insertNew(articles: List<ArticleEntity>): List<Long>
 
     @Query(
         """SELECT a.feedUrl, a.guid, f.title AS feedTitle, a.title, a.link, a.publishedAt, a.favourite
@@ -164,7 +176,14 @@ interface ArticleDao {
     suspend fun deleteForFeeds(feedUrls: List<String>)
 }
 
-@Database(entities = [FeedEntity::class, ArticleEntity::class], version = 2)
+// A real migration, unlike the destructive fallback in RssApp: rebuilding the
+// tables would lose favourites and make every stored post look new, so the
+// next background refresh would notify all of them.
+@Database(
+    entities = [FeedEntity::class, ArticleEntity::class],
+    version = 3,
+    autoMigrations = [AutoMigration(from = 2, to = 3)],
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun feedDao(): FeedDao
 

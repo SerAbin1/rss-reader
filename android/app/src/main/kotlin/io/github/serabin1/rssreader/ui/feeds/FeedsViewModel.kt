@@ -64,6 +64,10 @@ class FeedsViewModel(private val reader: Reader) : ViewModel() {
         viewModelScope.launch { reader.retry(feedUrl) }
     }
 
+    fun setNotify(feedUrl: String, notify: Boolean) {
+        viewModelScope.launch { reader.setNotify(feedUrl, notify) }
+    }
+
     fun remove(feedUrl: String) {
         viewModelScope.launch { reader.removeFeed(feedUrl)?.let { messages.send(it) } }
     }

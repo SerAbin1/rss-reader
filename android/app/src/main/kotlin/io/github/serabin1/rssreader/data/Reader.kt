@@ -115,18 +115,24 @@ class Reader(
 
     // ---- Refresh -----------------------------------------------------------
 
-    /** Fetches every feed and syncs. A refresh already running is not doubled up. */
-    suspend fun refresh() {
-        if (!refreshMutex.tryLock()) return
+    suspend fun setNotify(feedUrl: String, notify: Boolean) = feeds.setNotify(feedUrl, notify)
+
+    /**
+     * Fetches every feed and syncs. A refresh already running is not doubled up.
+     * Returns the posts it stored for the first time from feeds with
+     * notifications on — empty if it didn't run.
+     */
+    suspend fun refresh(): List<ArticleEntity> {
+        if (!refreshMutex.tryLock()) return emptyList()
         try {
-            doRefresh()
+            return doRefresh()
         } finally {
             _progress.value = null
             refreshMutex.unlock()
         }
     }
 
-    private suspend fun doRefresh() {
+    private suspend fun doRefresh(): List<ArticleEntity> {
         val token = prefs.deviceToken()
         feedsReconciled = false
         degradedPrompted = false
@@ -141,8 +147,8 @@ class Reader(
         // the first paint, so ordering costs nothing and every feed the group
         // knows about is fetched in the same pass.
         // The watermark too, so posts read on another device are never stored
-        // here. Pulling is safe before the load is known to be complete —
-        // max() only moves it forward; only the push waits.
+        // here, nor notified as new. Pulling is safe before the load is known
+        // to be complete — max() only moves it forward; only the push waits.
         if (token != null) {
             feedsReconciled = syncing { reconcileFeeds(token) }.isSuccess
             syncing { sync.pullWatermark(token) }.onSuccess { remote ->
@@ -151,12 +157,13 @@ class Reader(
             }
         }
 
-        fetchAll(feeds.all())
+        val arrived = fetchAll(feeds.all())
 
         if (token != null) maybePushWatermark(token)
         // Again, so posts read on another device expire in the same pass.
         prune()
         prefs.setLastRefreshAt(System.currentTimeMillis())
+        return arrived
     }
 
     // Drops read posts. Runs at the start and end of every refresh, and on a
@@ -202,43 +209,45 @@ class Reader(
         removeLocally(result.removed)
     }
 
-    private suspend fun fetchAll(list: List<FeedEntity>) = coroutineScope {
-        if (list.isEmpty()) return@coroutineScope
+    // Fetches every feed and stores its unread posts; returns only the newly
+    // stored ones from feeds with notifications on.
+    private suspend fun fetchAll(list: List<FeedEntity>): List<ArticleEntity> = coroutineScope {
+        if (list.isEmpty()) return@coroutineScope emptyList()
         val watermark = prefs.lastReadAt()
         val permits = Semaphore(FETCH_CONCURRENCY)
         _progress.update { RefreshProgress(settled = it?.settled ?: 0, total = (it?.total ?: 0) + list.size) }
         list.map { feed ->
             async {
-                permits.withPermit { fetchOne(feed, watermark) }
+                val stored = permits.withPermit { fetchOne(feed, watermark) }
                 _progress.update { it?.copy(settled = it.settled + 1) }
+                if (feed.notify) stored else emptyList()
             }
-        }.awaitAll()
+        }.awaitAll().flatten()
     }
 
-    // Returns whether it succeeded. The failure reason is kept on the row so
-    // the feed list can say why, and so a later push knows the load was
-    // degraded.
-    private suspend fun fetchOne(feed: FeedEntity, watermark: Long?): Boolean = try {
+    // Returns the posts stored for the first time; empty on failure. The
+    // failure reason is kept on the row so the feed list can say why, and so
+    // a later push knows the load was degraded.
+    private suspend fun fetchOne(feed: FeedEntity, watermark: Long?): List<ArticleEntity> = try {
         val parsed = fetcher.fetch(feed.feedUrl)
         fetched[feed.feedUrl] = parsed.posts
-        store(feed.title, parsed.posts, watermark)
-        feeds.markFetched(feed.feedUrl, parsed.siteUrl)
-        true
+        store(feed.title, parsed.posts, watermark).also { feeds.markFetched(feed.feedUrl, parsed.siteUrl) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         Log.w(TAG, "${feed.title}: ${e.message}")
         feeds.markFailed(feed.feedUrl, e.message ?: "Failed to fetch feed.")
-        false
+        emptyList()
     }
 
     // Read posts are never stored: they'd only be pruned on the next pass.
     // An existing row is left alone, which is what keeps a favourite a favourite.
-    private suspend fun store(feedTitle: String, posts: List<Post>, watermark: Long?) {
-        articles.insertNew(
-            posts.filter { !ReadState.isRead(it.publishedAt, watermark) }
-                .map { ArticleEntity(it.feedUrl, it.guid, feedTitle, it.title, it.link, it.publishedAt) },
-        )
+    // Returns the rows that weren't already there.
+    private suspend fun store(feedTitle: String, posts: List<Post>, watermark: Long?): List<ArticleEntity> {
+        val rows = posts.filter { !ReadState.isRead(it.publishedAt, watermark) }
+            .map { ArticleEntity(it.feedUrl, it.guid, feedTitle, it.title, it.link, it.publishedAt) }
+        val ids = articles.insertNew(rows)
+        return rows.filterIndexed { i, _ -> ids[i] != -1L }
     }
 
     private suspend fun removeLocally(feedUrls: List<String>) {
