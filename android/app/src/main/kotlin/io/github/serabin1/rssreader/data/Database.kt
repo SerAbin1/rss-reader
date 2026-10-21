@@ -86,8 +86,9 @@ interface FeedDao {
     @Query("SELECT * FROM feed WHERE feedUrl = :feedUrl")
     suspend fun get(feedUrl: String): FeedEntity?
 
+    // Row ids in input order, -1 where the feed was already here.
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertNew(feeds: List<FeedEntity>)
+    suspend fun insertNew(feeds: List<FeedEntity>): List<Long>
 
     @Upsert
     suspend fun upsert(feeds: List<FeedEntity>)

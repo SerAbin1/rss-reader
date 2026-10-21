@@ -10,7 +10,9 @@ import io.github.serabin1.rssreader.core.RemoteFeed
 import io.github.serabin1.rssreader.core.Subscriptions
 import io.github.serabin1.rssreader.core.SyncState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -26,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 data class RefreshProgress(val settled: Int, val total: Int)
@@ -132,7 +135,7 @@ class Reader(
         }
     }
 
-    private suspend fun doRefresh(): List<ArticleEntity> {
+    private suspend fun doRefresh(): List<ArticleEntity> = coroutineScope {
         val token = prefs.deviceToken()
         feedsReconciled = false
         degradedPrompted = false
@@ -142,28 +145,44 @@ class Reader(
         prune()
         applyCurated(curated.load())
 
-        // Before fetching rather than alongside it, unlike the web app, which
-        // races the two to get a first paint out. Here the stored articles are
-        // the first paint, so ordering costs nothing and every feed the group
-        // knows about is fetched in the same pass.
-        // The watermark too, so posts read on another device are never stored
-        // here, nor notified as new. Pulling is safe before the load is known
-        // to be complete — max() only moves it forward; only the push waits.
-        if (token != null) {
-            feedsReconciled = syncing { reconcileFeeds(token) }.isSuccess
-            syncing { sync.pullWatermark(token) }.onSuccess { remote ->
-                remoteWatermark = remote
-                remote?.let { prefs.advanceLastReadAt(it) }
-            }
+        // Both sync calls race the fetch, as on the web. Posts are fetched
+        // alongside the watermark pull but stored only once it's in, so posts
+        // read on another device are never stored here, nor notified as new.
+        // Pulling is safe before the load is known to be complete — max()
+        // only moves it forward; only the push waits for the end.
+        val watermark = async {
+            if (token != null) pullWatermarkWithin(token)
+            prefs.lastReadAt()
         }
+        val reconciling = token?.let { async { syncing { reconcileFeeds(it) } } }
 
-        val arrived = fetchAll(feeds.all())
+        val arrived = fetchAll(feeds.all(), watermark).toMutableList()
+
+        // Feeds the reconcile turned up get a second pass, like the web's
+        // loadInto(arrived).
+        reconciling?.await()?.onSuccess { added ->
+            feedsReconciled = true
+            arrived += fetchAll(added, watermark)
+        }
 
         if (token != null) maybePushWatermark(token)
         // Again, so posts read on another device expire in the same pass.
         prune()
         prefs.setLastRefreshAt(System.currentTimeMillis())
-        return arrived
+        // A feed the reconcile removed may have been fetched before it went.
+        val live = feeds.all().map { it.feedUrl }.toSet()
+        arrived.filter { it.feedUrl in live }
+    }
+
+    // Long enough for a normal round trip, short enough that a dead server
+    // doesn't hold up storing posts — they're then filtered by the local
+    // watermark. A late answer is dropped, as on the web.
+    private suspend fun pullWatermarkWithin(token: String) {
+        withTimeoutOrNull(WATERMARK_PULL_TIMEOUT_MS) { syncing { sync.pullWatermark(token) } }
+            ?.onSuccess { remote ->
+                remoteWatermark = remote
+                remote?.let { prefs.advanceLastReadAt(it) }
+            }
     }
 
     // Drops read posts. Runs at the start and end of every refresh, and on a
@@ -195,7 +214,8 @@ class Reader(
     }
 
     // Port of app.ts's reconcileFeeds; the decisions live in core/Reconcile.
-    private suspend fun reconcileFeeds(token: String) {
+    // Returns the feeds it added, which have yet to be fetched.
+    private suspend fun reconcileFeeds(token: String): List<FeedEntity> {
         val all = feeds.all()
         val curatedUrls = all.filter { it.curated }.map { it.feedUrl }.toSet()
         val personal = all.filter { !it.curated }.map { Feed(it.feedUrl, it.title) }
@@ -205,15 +225,16 @@ class Reader(
         val group = if (push.isEmpty) remote else sync.pushFeedChanges(token, push.additions, push.retractions)
 
         val result = Reconcile.applyGroup(group.map(SyncedFeed::toRemote), curatedUrls)
-        feeds.insertNew(result.live.map { FeedEntity(it.feedUrl, it.title, siteUrl = null, curated = false, lastError = null) })
+        val rows = result.live.map { FeedEntity(it.feedUrl, it.title, siteUrl = null, curated = false, lastError = null) }
+        val ids = feeds.insertNew(rows)
         removeLocally(result.removed)
+        return rows.filterIndexed { i, _ -> ids[i] != -1L }
     }
 
     // Fetches every feed and stores its unread posts; returns only the newly
     // stored ones from feeds with notifications on.
-    private suspend fun fetchAll(list: List<FeedEntity>): List<ArticleEntity> = coroutineScope {
+    private suspend fun fetchAll(list: List<FeedEntity>, watermark: Deferred<Long?>): List<ArticleEntity> = coroutineScope {
         if (list.isEmpty()) return@coroutineScope emptyList()
-        val watermark = prefs.lastReadAt()
         val permits = Semaphore(FETCH_CONCURRENCY)
         _progress.update { RefreshProgress(settled = it?.settled ?: 0, total = (it?.total ?: 0) + list.size) }
         list.map { feed ->
@@ -227,11 +248,12 @@ class Reader(
 
     // Returns the posts stored for the first time; empty on failure. The
     // failure reason is kept on the row so the feed list can say why, and so
-    // a later push knows the load was degraded.
-    private suspend fun fetchOne(feed: FeedEntity, watermark: Long?): List<ArticleEntity> = try {
+    // a later push knows the load was degraded. The watermark is awaited only
+    // once the feed is in, so a pull in flight doesn't hold up the fetch.
+    private suspend fun fetchOne(feed: FeedEntity, watermark: Deferred<Long?>): List<ArticleEntity> = try {
         val parsed = fetcher.fetch(feed.feedUrl)
         fetched[feed.feedUrl] = parsed.posts
-        store(feed.title, parsed.posts, watermark).also { feeds.markFetched(feed.feedUrl, parsed.siteUrl) }
+        store(feed.title, parsed.posts, watermark.await()).also { feeds.markFetched(feed.feedUrl, parsed.siteUrl) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -390,7 +412,7 @@ class Reader(
         val rows = additions.added.map { FeedEntity(it.feedUrl, it.title, siteUrl = null, curated = false, lastError = null) }
         feeds.insertNew(rows)
         scope.launch {
-            fetchAll(rows)
+            fetchAll(rows, CompletableDeferred(prefs.lastReadAt()))
             _progress.value = null
             reconcileAfterAdd()
         }
@@ -409,7 +431,7 @@ class Reader(
 
     suspend fun retry(feedUrl: String) {
         val feed = feeds.get(feedUrl) ?: return
-        fetchOne(feed, prefs.lastReadAt())
+        fetchOne(feed, CompletableDeferred(prefs.lastReadAt()))
         // Clearing the last failure makes the load whole again, so the push it
         // held back can go — unless you read while it was degraded, which
         // stays the banner's question.
@@ -479,6 +501,7 @@ class Reader(
         // Feeds are on different hosts, so this only caps parsing memory and
         // the burst; a dead feed holds its slot for up to the 45s call timeout.
         const val FETCH_CONCURRENCY = 50
+        const val WATERMARK_PULL_TIMEOUT_MS = 2500L
     }
 }
 
