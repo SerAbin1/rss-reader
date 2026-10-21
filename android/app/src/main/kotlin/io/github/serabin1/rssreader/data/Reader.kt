@@ -140,19 +140,20 @@ class Reader(
         // races the two to get a first paint out. Here the stored articles are
         // the first paint, so ordering costs nothing and every feed the group
         // knows about is fetched in the same pass.
+        // The watermark too, so posts read on another device are never stored
+        // here. Pulling is safe before the load is known to be complete —
+        // max() only moves it forward; only the push waits.
         if (token != null) {
             feedsReconciled = syncing { reconcileFeeds(token) }.isSuccess
-        }
-
-        fetchAll(feeds.all())
-
-        if (token != null) {
             syncing { sync.pullWatermark(token) }.onSuccess { remote ->
                 remoteWatermark = remote
                 remote?.let { prefs.advanceLastReadAt(it) }
             }
-            maybePushWatermark(token)
         }
+
+        fetchAll(feeds.all())
+
+        if (token != null) maybePushWatermark(token)
         // Again, so posts read on another device expire in the same pass.
         prune()
         prefs.setLastRefreshAt(System.currentTimeMillis())
