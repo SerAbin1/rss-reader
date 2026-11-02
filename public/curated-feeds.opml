@@ -52,6 +52,7 @@
     <outline htmlUrl="https://karboosx.net/rss.xml" text="Karboosx" title="Karboosx" xmlUrl="https://karboosx.net/rss.xml" />
     <outline htmlUrl="https://www.allthingsdistributed.com/atom.xml" text="All Things Distributed" title="All Things Distributed" xmlUrl="https://www.allthingsdistributed.com/atom.xml" />
     <outline htmlUrl="https://blog.cloudflare.com/rss/" text="Cloudflare Blog" title="Cloudflare Blog" xmlUrl="https://blog.cloudflare.com/rss/" />
+    <outline htmlUrl="https://joho-todai.com/en/" text="Joho no Todai (English)" title="Joho no Todai (English)" xmlUrl="https://joho-todai.com/en/rss/" />
 </outline>
     <outline text="Social" title="Social">    <outline htmlUrl="https://indconlawphil.wordpress.com/feed/" text="Constitutional Law and Philosophy" title="Constitutional Law and Philosophy" xmlUrl="https://indconlawphil.wordpress.com/feed/" />
 </outline>
