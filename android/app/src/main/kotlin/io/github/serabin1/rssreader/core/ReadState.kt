@@ -9,6 +9,15 @@ object ReadState {
         lastReadAt: Long?,
     ): Boolean = lastReadAt != null && publishedAt <= lastReadAt
 
+    // A post swiped back to unread stays unread in the UI even though the
+    // watermark has passed it — the watermark can't move back (sync merges
+    // with max()), so the override is purely local state alongside it.
+    fun isRead(
+        publishedAt: Long,
+        lastReadAt: Long?,
+        overrideUnread: Boolean,
+    ): Boolean = !overrideUnread && isRead(publishedAt, lastReadAt)
+
     // `posts` must be sorted ascending by publishedAt. -1 if everything is read.
     fun findFirstUnreadIndex(
         posts: List<Long>,

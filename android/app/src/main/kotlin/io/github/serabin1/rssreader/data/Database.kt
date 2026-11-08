@@ -39,6 +39,11 @@ data class FeedEntity(
 // Favourites are exempt and kept indefinitely (on this device only — sync
 // knows nothing of them); feedTitle is a copy so a favourite still says where
 // it came from after its feed is unsubscribed.
+//
+// `unread` is the other local-only flag: a post swiped back to unread after
+// the watermark passed it. It overrides the watermark in the UI, and exempts
+// the row from the prune the same way a favourite does — the watermark itself
+// stays put, because sync only accepts it moving forward.
 @Entity(
     tableName = "article",
     primaryKeys = ["feedUrl", "guid"],
@@ -52,6 +57,7 @@ data class ArticleEntity(
     val link: String,
     val publishedAt: Long,
     val favourite: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val unread: Boolean = false,
 )
 
 // A list row: the article plus its feed's current title.
@@ -63,6 +69,7 @@ data class ArticleRow(
     val link: String,
     val publishedAt: Long,
     val favourite: Boolean,
+    val unread: Boolean,
 )
 
 data class FeedCount(
@@ -125,18 +132,27 @@ interface ArticleDao {
     suspend fun insertNew(articles: List<ArticleEntity>): List<Long>
 
     @Query(
-        """SELECT a.feedUrl, a.guid, f.title AS feedTitle, a.title, a.link, a.publishedAt, a.favourite
+        """SELECT a.feedUrl, a.guid, f.title AS feedTitle, a.title, a.link, a.publishedAt, a.favourite, a.unread
            FROM article a JOIN feed f ON f.feedUrl = a.feedUrl
-           WHERE a.publishedAt > :after ORDER BY $UNREAD_ORDER""",
+           WHERE a.publishedAt > :after OR a.unread = 1 ORDER BY $UNREAD_ORDER""",
     )
     fun observeListed(after: Long): Flow<List<ArticleRow>>
 
     @Query(
-        """SELECT a.feedUrl, a.guid, COALESCE(f.title, a.feedTitle) AS feedTitle, a.title, a.link, a.publishedAt, a.favourite
+        """SELECT a.feedUrl, a.guid, COALESCE(f.title, a.feedTitle) AS feedTitle, a.title, a.link, a.publishedAt, a.favourite, a.unread
            FROM article a LEFT JOIN feed f ON f.feedUrl = a.feedUrl
            WHERE a.favourite = 1 ORDER BY a.publishedAt DESC""",
     )
     fun observeFavourites(): Flow<List<ArticleRow>>
+
+    // Posts marked unread again, for the feed page: its rows are built from
+    // the in-memory fetch, so the flag has to arrive separately.
+    @Query(
+        """SELECT a.feedUrl, a.guid, COALESCE(f.title, a.feedTitle) AS feedTitle, a.title, a.link, a.publishedAt, a.favourite, a.unread
+           FROM article a LEFT JOIN feed f ON f.feedUrl = a.feedUrl
+           WHERE a.unread = 1 ORDER BY a.publishedAt DESC""",
+    )
+    fun observeUnreadOverrides(): Flow<List<ArticleRow>>
 
     @Query("SELECT COUNT(*) FROM article WHERE favourite = 1")
     fun observeFavouriteCount(): Flow<Int>
@@ -148,8 +164,20 @@ interface ArticleDao {
         favourite: Boolean,
     )
 
+    @Query("UPDATE article SET unread = :unread WHERE feedUrl = :feedUrl AND guid = :guid")
+    suspend fun setUnread(
+        feedUrl: String,
+        guid: String,
+        unread: Boolean,
+    )
+
+    // "Mark read up to here" also takes back any "unread" swipes at or below
+    // the post it's aimed at, watermark or no watermark.
+    @Query("UPDATE article SET unread = 0 WHERE unread = 1 AND publishedAt <= :upTo")
+    suspend fun clearUnreadUpTo(upTo: Long)
+
     @Query(
-        """SELECT a.feedUrl, a.guid, f.title AS feedTitle, a.title, a.link, a.publishedAt, a.favourite
+        """SELECT a.feedUrl, a.guid, f.title AS feedTitle, a.title, a.link, a.publishedAt, a.favourite, a.unread
            FROM article a JOIN feed f ON f.feedUrl = a.feedUrl
            WHERE a.publishedAt > :after ORDER BY $UNREAD_ORDER LIMIT 1""",
     )
@@ -157,20 +185,25 @@ interface ArticleDao {
 
     @Query(
         """SELECT COUNT(*) FROM article a JOIN feed f ON f.feedUrl = a.feedUrl
-           WHERE a.publishedAt > :after AND a.publishedAt <= :upTo""",
+           WHERE (a.publishedAt > :after OR a.unread = 1) AND a.publishedAt <= :upTo""",
     )
     suspend fun countUnreadUpTo(
         after: Long,
         upTo: Long,
     ): Int
 
-    @Query("SELECT MAX(a.publishedAt) FROM article a JOIN feed f ON f.feedUrl = a.feedUrl WHERE a.publishedAt > :after")
+    // Overridden posts count too, so "mark all" has a target even when
+    // everything past the watermark is read and only a swipe-back is left.
+    @Query(
+        """SELECT MAX(a.publishedAt) FROM article a JOIN feed f ON f.feedUrl = a.feedUrl
+           WHERE a.publishedAt > :after OR a.unread = 1""",
+    )
     suspend fun lastUnreadPublishedAt(after: Long): Long?
 
-    @Query("SELECT feedUrl, COUNT(*) AS count FROM article WHERE publishedAt > :after GROUP BY feedUrl")
+    @Query("SELECT feedUrl, COUNT(*) AS count FROM article WHERE publishedAt > :after OR unread = 1 GROUP BY feedUrl")
     fun observeUnreadCounts(after: Long): Flow<List<FeedCount>>
 
-    @Query("DELETE FROM article WHERE favourite = 0 AND publishedAt <= :watermark")
+    @Query("DELETE FROM article WHERE favourite = 0 AND unread = 0 AND publishedAt <= :watermark")
     suspend fun pruneRead(watermark: Long)
 
     @Query("DELETE FROM article WHERE favourite = 0 AND feedUrl IN (:feedUrls)")
@@ -182,8 +215,8 @@ interface ArticleDao {
 // next background refresh would notify all of them.
 @Database(
     entities = [FeedEntity::class, ArticleEntity::class],
-    version = 3,
-    autoMigrations = [AutoMigration(from = 2, to = 3)],
+    version = 4,
+    autoMigrations = [AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun feedDao(): FeedDao

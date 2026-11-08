@@ -88,6 +88,7 @@ class Reader(
     // The unread posts plus any read since the last prune.
     val listed: Flow<List<ArticleRow>> = prefs.listedAfter.flatMapLatest { articles.observeListed(after(it)) }.distinctUntilChanged()
     val favourites: Flow<List<ArticleRow>> = articles.observeFavourites().distinctUntilChanged()
+    val unreadOverrides: Flow<List<ArticleRow>> = articles.observeUnreadOverrides().distinctUntilChanged()
     val favouriteCount: Flow<Int> = articles.observeFavouriteCount().distinctUntilChanged()
 
     // A read post seen on a feed's page has no row, so it gets one first.
@@ -96,6 +97,16 @@ class Reader(
             listOf(ArticleEntity(article.feedUrl, article.guid, article.feedTitle, article.title, article.link, article.publishedAt)),
         )
         articles.setFavourite(article.feedUrl, article.guid, favourite)
+    }
+
+    // "Mark unread": a local-only flag that overrides the watermark in the UI.
+    // The row is kept (prune exempts it) so the flag has somewhere to live;
+    // inserting first covers the case where the row was already pruned.
+    suspend fun setUnread(article: ArticleRow, unread: Boolean) {
+        articles.insertNew(
+            listOf(ArticleEntity(article.feedUrl, article.guid, article.feedTitle, article.title, article.link, article.publishedAt, article.favourite)),
+        )
+        articles.setUnread(article.feedUrl, article.guid, unread)
     }
 
     // Each feed's posts as last fetched, read ones included, for the feed's
@@ -285,7 +296,11 @@ class Reader(
 
     // Opening a post (in the browser) advances the watermark only when it's
     // the very next unread one; opening further ahead reads just that post.
+    // A post that was swiped back to unread always becomes read again on open:
+    // the watermark can't move back (sync merges with max()), so clearing the
+    // local flag is the only way to "re-read" it.
     suspend fun open(feedUrl: String, guid: String) {
+        articles.setUnread(feedUrl, guid, false)
         val first = firstUnread() ?: return
         if (first.feedUrl == feedUrl && first.guid == guid) markRead(first.publishedAt)
     }
@@ -297,6 +312,11 @@ class Reader(
     suspend fun lastUnreadPublishedAt(): Long? = articles.lastUnreadPublishedAt(after(prefs.lastReadAt()))
 
     suspend fun markReadUpTo(publishedAt: Long) {
+        // "Mark read up to here" is absolute: it also takes back any swipe-back
+        // overrides in that range, so a post the user marked unread by hand
+        // doesn't survive an explicit "read up to here". The flag clear is
+        // unconditional (it's purely local) even when the watermark can't move.
+        articles.clearUnreadUpTo(publishedAt)
         ReadState.watermarkAfterMarkUpTo(prefs.lastReadAt(), publishedAt)?.let { markRead(it) }
     }
 

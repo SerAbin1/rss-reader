@@ -52,7 +52,7 @@ internal fun sections(rows: List<ArticleRow>, isRead: (ArticleRow) -> Boolean): 
 
 class FlowViewModel(private val reader: Reader) : ViewModel() {
     val articles: StateFlow<List<DaySection>?> = combine(reader.listed, reader.lastReadAt) { rows, lastReadAt ->
-        sections(rows) { ReadState.isRead(it.publishedAt, lastReadAt) }
+        sections(rows) { ReadState.isRead(it.publishedAt, lastReadAt, it.unread) }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // Read state doesn't apply here: a favourite is kept whether read or not.
@@ -80,6 +80,10 @@ class FlowViewModel(private val reader: Reader) : ViewModel() {
 
     fun toggleFavourite(article: ArticleRow) {
         viewModelScope.launch { reader.setFavourite(article, !article.favourite) }
+    }
+
+    fun markUnread(article: ArticleRow) {
+        viewModelScope.launch { reader.setUnread(article, true) }
     }
 
     fun markUpTo(publishedAt: Long) {

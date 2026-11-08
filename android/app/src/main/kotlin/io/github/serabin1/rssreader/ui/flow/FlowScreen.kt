@@ -116,6 +116,7 @@ fun FlowScreen(startWithFavourites: Boolean, onBack: () -> Unit) {
                     onOpenInBrowser = openExternally,
                     onToggleFavourite = vm::toggleFavourite,
                     onMarkUpTo = null,
+                    onMarkUnread = null,
                     modifier = Modifier.padding(padding),
                 )
             }
@@ -136,6 +137,7 @@ fun FlowScreen(startWithFavourites: Boolean, onBack: () -> Unit) {
                         onOpenInBrowser = openExternally,
                         onToggleFavourite = vm::toggleFavourite,
                         onMarkUpTo = { vm.markUpTo(it.publishedAt) },
+                        onMarkUnread = vm::markUnread,
                     )
                 }
             }
@@ -146,7 +148,7 @@ fun FlowScreen(startWithFavourites: Boolean, onBack: () -> Unit) {
         AlertDialog(
             onDismissRequest = vm::cancelPending,
             title = { Text("Mark ${mark.count} posts as read?") },
-            text = { Text("Read posts can't be marked unread again.") },
+            text = { Text("Posts read this way stay read, though you can swipe one back to unread.") },
             confirmButton = { TextButton(onClick = vm::confirmPending) { Text("Mark read") } },
             dismissButton = { TextButton(onClick = vm::cancelPending) { Text("Cancel") } },
         )

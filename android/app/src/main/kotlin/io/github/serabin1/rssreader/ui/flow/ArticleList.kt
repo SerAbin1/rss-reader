@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -31,6 +32,7 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,9 +51,10 @@ import io.github.serabin1.rssreader.ui.common.FeedAvatar
 import io.github.serabin1.rssreader.ui.common.share
 
 // Read You's article list: day headers that stick while their posts scroll
-// under them, then feed · date and the title per post. Swiping a post right
-// to left toggles its favourite, as in Read You; long-press has the same
-// actions for anyone who doesn't know the gesture.
+// under them, then feed · date and the title per post. Swiping a post left
+// toggles its favourite, as in Read You; swiping a read (greyed) post right
+// marks it unread again. Long-press has the same actions for anyone who
+// doesn't know the gestures.
 @Composable
 fun ArticleList(
     sections: List<DaySection>,
@@ -60,6 +63,8 @@ fun ArticleList(
     onToggleFavourite: (ArticleRow) -> Unit,
     // Null where marking read makes no sense (the Favourites tab).
     onMarkUpTo: ((ArticleRow) -> Unit)?,
+    // Null where marking unread makes no sense (the Favourites tab).
+    onMarkUnread: ((ArticleRow) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -80,45 +85,88 @@ fun ArticleList(
                 key = { "${it.row.feedUrl}\u0000${it.row.guid}" },
                 contentType = { "article" },
             ) { listed ->
-                SwipeToFavourite(listed.row, onToggleFavourite) {
-                    ArticleItem(listed, onOpen, onOpenInBrowser, onToggleFavourite, onMarkUpTo)
+                SwipeActions(listed, onToggleFavourite, onMarkUnread) {
+                    ArticleItem(listed, onOpen, onOpenInBrowser, onToggleFavourite, onMarkUpTo, onMarkUnread)
                 }
             }
         }
     }
 }
 
-// The swipe never dismisses anything: past the threshold it toggles the
-// favourite and springs back, so the row stays where it was.
+// Left swipe (end-to-start) toggles the favourite and springs back, as in
+// Read You. Right swipe (start-to-end) on a read, greyed row marks it unread:
+// it slides fully out, the row flips to unread, then slides back in. Neither
+// gesture dismisses or removes the row; "mark unread" is a local flag, not a
+// watermark rewind, because sync only accepts the watermark moving forward.
 @Composable
-private fun SwipeToFavourite(
-    article: ArticleRow,
+private fun SwipeActions(
+    listed: ListedArticle,
     onToggleFavourite: (ArticleRow) -> Unit,
+    onMarkUnread: ((ArticleRow) -> Unit)?,
     content: @Composable () -> Unit,
 ) {
-    val currentArticle by rememberUpdatedState(article)
+    val currentListed by rememberUpdatedState(listed)
+    val currentToggle by rememberUpdatedState(onToggleFavourite)
+    val currentMarkUnread by rememberUpdatedState(onMarkUnread)
+    val canMarkUnread = onMarkUnread != null
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) onToggleFavourite(currentArticle)
-            false
+            when (value) {
+                SwipeToDismissBoxValue.EndToStart -> {
+                    currentToggle(currentListed.row)
+                    false
+                }
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    if (currentListed.read) {
+                        currentMarkUnread?.invoke(currentListed.row)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                SwipeToDismissBoxValue.Settled -> true
+            }
         },
     )
+    // After a committed right swipe, slide the row back to its place: the Room
+    // write has already re-emitted it as unread, so it returns un-greyed.
+    LaunchedEffect(state.currentValue) {
+        if (state.currentValue == SwipeToDismissBoxValue.StartToEnd) state.reset()
+    }
     SwipeToDismissBox(
         state = state,
-        enableDismissFromStartToEnd = false,
+        enableDismissFromStartToEnd = canMarkUnread,
+        enableDismissFromEndToStart = true,
         backgroundContent = {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Icon(
-                    if (article.favourite) Icons.Filled.FavoriteBorder else Icons.Filled.Favorite,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+            val direction = state.dismissDirection
+            if (direction == SwipeToDismissBoxValue.StartToEnd) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Icon(
+                        Icons.Filled.MailOutline,
+                        contentDescription = "Mark as unread",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Icon(
+                        if (currentListed.row.favourite) Icons.Filled.FavoriteBorder else Icons.Filled.Favorite,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
             }
         },
     ) {
@@ -134,12 +182,14 @@ private fun ArticleItem(
     onOpenInBrowser: (ArticleRow) -> Unit,
     onToggleFavourite: (ArticleRow) -> Unit,
     onMarkUpTo: ((ArticleRow) -> Unit)?,
+    onMarkUnread: ((ArticleRow) -> Unit)?,
 ) {
     val article = listed.row
     val read = listed.read
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     val canMark = onMarkUpTo != null && !read
+    val canMarkUnread = onMarkUnread != null && read
 
     Box {
         Row(
@@ -203,6 +253,9 @@ private fun ArticleItem(
             )
             if (canMark) {
                 DropdownMenuItem(text = { Text("Mark read up to here") }, onClick = { menu = false; onMarkUpTo(article) })
+            }
+            if (canMarkUnread) {
+                DropdownMenuItem(text = { Text("Mark as unread") }, onClick = { menu = false; onMarkUnread(article) })
             }
             DropdownMenuItem(text = { Text("Share") }, onClick = { menu = false; share(context, article.title, article.link) })
         }

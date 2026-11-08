@@ -54,18 +54,20 @@ class FeedViewModel(private val reader: Reader, private val feedUrl: String, pri
         }
     }
 
-    val page: StateFlow<FeedPage?> = combine(posts, reader.lastReadAt, reader.favourites) { result, lastReadAt, favourites ->
-        result?.fold(
-            onSuccess = { list ->
-                val favourite = favourites.filter { it.feedUrl == feedUrl }.map { it.guid }.toSet()
-                val rows = list.sortedByDescending { it.publishedAt }.map {
-                    ArticleRow(it.feedUrl, it.guid, feedTitle, it.title, it.link, it.publishedAt, it.guid in favourite)
-                }
-                FeedPage.Loaded(sections(rows) { ReadState.isRead(it.publishedAt, lastReadAt) })
-            },
-            onFailure = { FeedPage.Failed(it.message ?: "Failed to fetch feed.") },
-        )
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val page: StateFlow<FeedPage?> =
+        combine(posts, reader.lastReadAt, reader.favourites, reader.unreadOverrides) { result, lastReadAt, favourites, unread ->
+            result?.fold(
+                onSuccess = { list ->
+                    val favourite = favourites.filter { it.feedUrl == feedUrl }.map { it.guid }.toSet()
+                    val overridden = unread.filter { it.feedUrl == feedUrl }.map { it.guid }.toSet()
+                    val rows = list.sortedByDescending { it.publishedAt }.map {
+                        ArticleRow(it.feedUrl, it.guid, feedTitle, it.title, it.link, it.publishedAt, it.guid in favourite, it.guid in overridden)
+                    }
+                    FeedPage.Loaded(sections(rows) { ReadState.isRead(it.publishedAt, lastReadAt, it.unread) })
+                },
+                onFailure = { FeedPage.Failed(it.message ?: "Failed to fetch feed.") },
+            )
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun opened(article: ArticleRow) {
         viewModelScope.launch { reader.open(article.feedUrl, article.guid) }
@@ -73,6 +75,10 @@ class FeedViewModel(private val reader: Reader, private val feedUrl: String, pri
 
     fun toggleFavourite(article: ArticleRow) {
         viewModelScope.launch { reader.setFavourite(article, !article.favourite) }
+    }
+
+    fun markUnread(article: ArticleRow) {
+        viewModelScope.launch { reader.setUnread(article, true) }
     }
 }
 
@@ -109,6 +115,7 @@ fun FeedScreen(feedUrl: String, feedTitle: String, onBack: () -> Unit) {
                         onOpenInBrowser = { vm.opened(it); openInDefaultBrowser(context, it.link) },
                         onToggleFavourite = vm::toggleFavourite,
                         onMarkUpTo = null,
+                        onMarkUnread = vm::markUnread,
                         modifier = Modifier.padding(padding),
                     )
                 }

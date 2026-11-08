@@ -21,6 +21,19 @@ class ReadStateTest {
         assertFalse(isRead(posts[1], posts[0]))
     }
 
+    @Test fun `an unread override keeps a read post unread`() {
+        assertFalse(ReadState.isRead(posts[0], posts[1], overrideUnread = true))
+    }
+
+    @Test fun `an unread override does not affect a post that is already unread`() {
+        assertFalse(ReadState.isRead(posts[2], posts[0], overrideUnread = true))
+    }
+
+    @Test fun `without an override the watermark still decides`() {
+        assertTrue(ReadState.isRead(posts[0], posts[1], overrideUnread = false))
+        assertFalse(ReadState.isRead(posts[2], posts[0], overrideUnread = false))
+    }
+
     @Test fun `findFirstUnreadIndex`() {
         assertEquals(0, findFirstUnreadIndex(posts, null))
         assertEquals(1, findFirstUnreadIndex(posts, posts[0]))
