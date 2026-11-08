@@ -21,6 +21,10 @@ jobs:
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Stay on the fully open-source path (MIT, wraps actions/cache)
+          # instead of the proprietary gradle-actions-caching component.
+          cache-provider: basic
 
       - name: Test
         run: ./gradlew :app:testDebugUnitTest
