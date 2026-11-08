@@ -3,7 +3,6 @@ import {
   deleteFavourite,
   deleteFeeds,
   type Favourite,
-  type Feed,
   getFavourites,
   getAllFeeds,
   getDeviceToken,
@@ -13,10 +12,29 @@ import {
   setDeviceToken,
   setLastReadAt,
 } from "../lib/db";
-import { parseFeed, type ParsedFeed, type Post } from "../lib/feed-parser";
-import { parseOpml } from "../lib/opml";
+import {
+  applyGroup,
+  describeImport,
+  favouriteKey,
+  formatFullDate,
+  formatPairCode,
+  formatPostDate,
+  isListed,
+  isRead,
+  mergeWatermark,
+  normalizeFeedUrl,
+  parseFeed,
+  parseOpml,
+  planAdditions,
+  planPush,
+  watermarkAfterClick,
+  watermarkAfterMarkUpTo,
+  type Feed,
+  type ParsedFeed,
+  type Post,
+  type RemoteFeed,
+} from "../lib/rust";
 import { isOnline, onConnectivityChange } from "../lib/connectivity";
-import { describeImport, normalizeFeedUrl, planAdditions } from "../lib/subscriptions";
 import {
   leaveSync,
   type PairResponse,
@@ -27,15 +45,6 @@ import {
   startPairing,
   SyncError,
 } from "../lib/sync-client";
-import { formatPairCode, mergeWatermark } from "../lib/sync-state";
-import {
-  favouriteKey,
-  isListed,
-  isRead,
-  watermarkAfterClick,
-  watermarkAfterMarkUpTo,
-} from "../lib/read-state";
-import { formatFullDate, formatPostDate } from "../lib/relative-date";
 
 const fileInput = document.querySelector<HTMLInputElement>("#opml-input")!;
 const addFeedForm = document.querySelector<HTMLFormElement>("#add-feed-form")!;
@@ -906,37 +915,39 @@ function curatedUrls(): Set<string> {
 // does not, and then adopts the result.
 async function reconcileFeeds(token: string, curatedUrls: Set<string>): Promise<Feed[]> {
   const remote = await pullFeeds(token);
-  const remoteUrls = new Set(remote.map((feed) => feed.feedUrl));
+  const remoteFeeds: RemoteFeed[] = remote.map((feed) => ({
+    feedUrl: feed.feedUrl,
+    title: feed.title,
+    deleted: feed.deletedAt !== null,
+  }));
 
   // Local-only feeds are adds this device made before pairing or while
   // offline. (There is no local delete yet, so a feed missing here can only
   // mean "never pushed", never "deleted locally" — revisit when removal
   // lands, since the two become indistinguishable.) Curated feeds are never
   // pushed as additions — they're identical for every group already.
-  const additions = currentFeeds.filter(
-    (feed) => !remoteUrls.has(feed.feedUrl) && !curatedUrls.has(feed.feedUrl),
-  );
-  // A feed that's curated as of this load but still sits live in the group's
-  // delta predates the curated list (see the Obsidian decision log's
-  // migration note) — retract it from the group too, in the same request, or
-  // every paired device's next pull just resurrects it as "personal".
-  const shadowedInGroup = remote
-    .filter((feed) => feed.deletedAt === null && curatedUrls.has(feed.feedUrl))
-    .map((feed) => feed.feedUrl);
-
+  // A feed that's curated as of this load but still sits live in the group
+  // predates the curated list (see the Obsidian decision log) — retract it
+  // in the same request, or every paired device's next pull just resurrects
+  // it as "personal".
+  const push = planPush(currentFeeds, [...curatedUrls], remoteFeeds);
   const group =
-    additions.length > 0 || shadowedInGroup.length > 0
-      ? await pushFeedChanges(token, additions, shadowedInGroup)
+    push.additions.length > 0 || push.retractions.length > 0
+      ? await pushFeedChanges(token, push.additions, push.retractions)
       : remote;
+  const groupFeeds: RemoteFeed[] = group.map((feed) => ({
+    feedUrl: feed.feedUrl,
+    title: feed.title,
+    deleted: feed.deletedAt !== null,
+  }));
 
-  const live = group.filter((feed) => feed.deletedAt === null && !curatedUrls.has(feed.feedUrl));
-  const tombstoned = group.filter((feed) => feed.deletedAt !== null).map((feed) => feed.feedUrl);
+  const { live, removed } = applyGroup(groupFeeds, [...curatedUrls]);
 
   const localUrls = new Set(currentFeeds.map((feed) => feed.feedUrl));
   const arrived = live.filter((feed) => !localUrls.has(feed.feedUrl));
 
   await saveFeeds(live.map(({ feedUrl, title }) => ({ feedUrl, title })));
-  await deleteFeeds(tombstoned);
+  await deleteFeeds(removed);
 
   currentFeeds = await getAllFeeds();
   renderAllFeeds();
