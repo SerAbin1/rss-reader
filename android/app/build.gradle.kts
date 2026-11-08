@@ -20,11 +20,10 @@ android {
         applicationId = "io.github.serabin1.rssreader"
         minSdk = 26
         targetSdk = 36
-        // CI passes its run number, so each published APK installs as an
-        // update over the previous one. Local builds are 1.
-        val buildNumber = providers.gradleProperty("buildNumber").map(String::toInt).getOrElse(1)
-        versionCode = buildNumber
-        versionName = "0.1.$buildNumber"
+        // CI derives both from the android-v* release tag (major*10000 + minor*100 + patch),
+        // so every published APK installs as an update over the previous one.
+        versionCode = providers.gradleProperty("versionCode").map(String::toInt).getOrElse(1)
+        versionName = providers.gradleProperty("versionName").getOrElse("1.0.0-dev")
         // The web app's origin: home of the sync endpoints and the live curated
         // feed list. Feeds themselves are fetched directly — Android has no
         // CORS, so /api/feed is a web-only concern.
