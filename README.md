@@ -8,48 +8,35 @@ Import an OPML file of feed subscriptions, and on every visit to the site, pull 
 
 ## Core Features
 
-- A curated default feed list ships with the build and is visible to every visitor with no setup
+- A curated default feed list is available with no setup
 - Manually add a single feed by URL, or import an OPML file to populate the subscription list (stored locally in the browser).
 - On each visit, fetch the latest items from every subscribed feed
 - Show a unified list of posts across all feeds
-- Read/unread tracking via a single "last read" watermark rather than per-post state
+- Read/unread tracking
 - Sync between **two devices** (pair with a code or QR)
 
-## Goals
+## Installation
 
-- Export current subscriptions back to OPML
-- Group feeds into folders/categories
-- Search/filter posts
-- Dark mode
-- Optional account + server-side storage to sync across devices
+### Android
 
-## Local Development
+The Android app is a native Kotlin app (Jetpack Compose, Material 3) modelled on [Read You](https://github.com/Ashinch/ReadYou): a feeds page and the unified unread list. Posts open in the browser (a Custom Tab; long-press → Open in browser for a full tab in the default browser), as they do on the web. It follows the web app's rules and joins the same sync group.
 
-```sh
-pnpm install
-pnpm dev        # start the Astro dev server: pages + /api/* + local D1, in workerd
-pnpm build      # build to dist/: client/ (the site) and server/ (the Worker)
-pnpm preview    # preview the production build locally
-pnpm d1:migrate # apply migrations/ to the local D1 that `pnpm dev` uses
-pnpm test       # run the test suite
-```
+#### F-Droid (Recommended)
 
-The site is Astro on its Cloudflare adapter: pages are prerendered, and `src/pages/api/[...path].ts` runs on demand, handing every `/api/*` request to the router in `functions/index.ts` and the handlers under `functions/api/`.
+1. Install [F-Droid](https://f-droid.org/) if you don't have it already.
+2. In F-Droid, go to **Settings → Repositories** and add this repository:
 
-After editing anything under `scripts/icons/`, run `bash scripts/generate-icons.sh` and commit the regenerated files in `public/`.
+   ```
+   https://serabin1.github.io/rss-reader/repo?fingerprint=3A5894B43A279EFF91B872CAE14C769154B17BAD1A7AB7E876E72DD2AD4ECD1D
+   ```
 
-## Android app
+   The `fingerprint` is the SHA-256 of the repo's signing key; you can verify it against [the repo page](https://serabin1.github.io/rss-reader/repo), which also has a QR code you can scan instead of typing the URL.
 
-`android/` is a native Kotlin app (Jetpack Compose, Material 3) modelled on [Read You](https://github.com/Ashinch/ReadYou): a feeds page and the unified unread list. Posts open in the browser (a Custom Tab; long-press → Open in browser for a full tab in the default browser), as they do on the web. It follows the web app's rules and joins the same sync group:
+3. Search for **RSS Reader** and install it. Further updates arrive through F-Droid automatically.
 
-```sh
-cd android
-./gradlew :app:testDebugUnitTest   # JVM unit tests (no device needed)
-./gradlew :app:installDebug        # build and install on a connected device/emulator
-```
+#### GitHub releases
 
-Needs JDK 21 and the Android SDK (`android/local.properties` → `sdk.dir`). Every push to `main` that touches the app runs the unit tests and, if they pass, publishes a signed release APK (`.github/workflows/android_gh_release.yml`) to GitHub Releases (`android-v0.1.<run number>`; the run number is the version code, so each installs over the last). Signing needs three repo secrets: `ANDROID_KEYSTORE_BASE64` (the keystore, base64), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`; without them the release job fails rather than ship a debug-signed APK. Keep a backup of the keystore — losing it means users must uninstall to take any later release. Local `installRelease` builds are debug-signed, so they can't install over a released APK (or vice versa) without an uninstall.
+1. Download the latest `rss-reader-*.apk` from [GitHub Releases](https://github.com/SerAbin1/rss-reader/releases).
+2. Open the downloaded file and allow installation from unknown sources if prompted.
 
-## Deployment
-
-Cloudflare Workers (static assets + the `/api/*` Worker), via GitHub Actions (`.github/workflows/web_deploy.yml`) rather than Cloudflare's native Git integration — every push to `main` runs `vp test run` → `vp run build` → D1 migrations (`cf`) → `wrangler deploy`, so a failing test blocks the deploy. Requires two repo secrets set under Settings → Secrets and variables → Actions: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. One-time Cloudflare account/project setup steps are in Obsidian (`BackEnd/DevOps/Deployment.md`), not reproduced here since they involve dashboard clicks, not code.
+The F-Droid repo and the GitHub release APKs are signed with the same key, so you can switch between the two without uninstalling.
