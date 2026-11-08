@@ -54,6 +54,16 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # The release APK packages librss_reader_core.so built from rust/.
+      # ubuntu-latest ships with the NDK under $ANDROID_NDK_HOME; cargo-ndk finds it.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
       - uses: gradle/actions/setup-gradle@v5
 
       # Without the key Gradle would quietly fall back to the debug key, and an

@@ -3,7 +3,7 @@ name: Android CI
 on:
   push:
     branches: [main]
-    paths: ["android/**", "src/lib/__fixtures__/**", "public/curated-feeds.opml"]
+    paths: ["android/**", "rust/**", "public/curated-feeds.opml"]
   workflow_dispatch:
 
 jobs:

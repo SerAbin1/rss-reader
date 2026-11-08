@@ -17,7 +17,17 @@ jobs:
         with:
           cache: true
 
-      - run: vp test run
+      # The tests and build are backed by the shared Rust crate (rust/) —
+      # it compiles to WASM for the site via `pnpm run build:wasm`.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli
+
+      - run: pnpm test
 
       # Astro with the Cloudflare adapter: dist/client is the site, dist/server
       # the Worker, and .wrangler/deploy/config.json points wrangler at both.
