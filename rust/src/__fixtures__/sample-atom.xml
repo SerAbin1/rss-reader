@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sample Atom Blog</title>
+  <link rel="self" href="https://example.org/atom.xml" />
+  <link rel="alternate" href="https://example.org/" />
+  <entry>
+    <title>First entry</title>
+    <link rel="self" href="https://example.org/atom.xml#first-entry" />
+    <link rel="alternate" href="https://example.org/first-entry" />
+    <id>urn:uuid:first-entry</id>
+    <published>2026-08-24T09:00:00Z</published>
+    <updated>2026-08-24T10:00:00Z</updated>
+  </entry>
+  <entry>
+    <title>Second entry, no published date</title>
+    <link href="https://example.org/second-entry" />
+    <id>urn:uuid:second-entry</id>
+    <updated>2026-08-25T09:00:00Z</updated>
+  </entry>
+  <entry>
+    <title>Missing id and link, should be skipped</title>
+    <updated>2026-08-26T09:00:00Z</updated>
+  </entry>
+</feed>
