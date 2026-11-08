@@ -4,10 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "pnpm run build:wasm && astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "vp test run",
+    "build:wasm": "cargo build --target wasm32-unknown-unknown --release --manifest-path rust/Cargo.toml && wasm-bindgen --target bundler --out-dir src/lib/rust/pkg rust/target/wasm32-unknown-unknown/release/rss_reader_core.wasm",
+    "test": "pnpm run build:wasm && vp test run",
     "test:watch": "vp test",
     "d1:migrate": "wrangler d1 migrations apply rss-reader-sync --local",
     "d1:migrate:remote": "cf d1 migrations apply fcf7783c-890c-4916-83b9-ef090885fc1d",
