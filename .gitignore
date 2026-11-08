@@ -16,10 +16,5 @@ node_modules/
 .dev.vars
 .vitest/
 
-# Rust
-# Track Cargo.lock for reproducible builds — this is the Rust convention,
-# unlike node_modules which is typically gitignored
-Cargo.lock
-
 # Rust build artifacts
 target/
