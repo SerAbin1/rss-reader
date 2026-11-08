@@ -12,6 +12,9 @@
 mod models;
 mod timestamps;
 
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
 pub mod feed_parser;
 pub mod opml;
 pub mod read_state;

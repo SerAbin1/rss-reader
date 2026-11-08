@@ -6,7 +6,7 @@
 use crate::models::Feed;
 
 /// One feed as the group knows it (synced representation).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RemoteFeed {
     pub feedUrl: String,
     pub title: String,
@@ -15,7 +15,7 @@ pub struct RemoteFeed {
 }
 
 /// What this device must tell the group before it can consume its answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ReconcilePush {
     /// Personal feeds the group has never heard of: adds made before pairing
     /// or offline. A feed the group knows only as a tombstone is not one — it
@@ -33,7 +33,7 @@ impl ReconcilePush {
 }
 
 /// What this device should keep after it applies the group's answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ReconcileResult {
     /// Live feeds in the group, minus the curated ones (shared with every
     /// device; never adopted as personal).

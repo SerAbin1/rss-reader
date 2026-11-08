@@ -22,7 +22,8 @@ use crate::models::Feed;
 /// Server-stamped, never client-stamped: with tombstones, feed membership is
 /// resolved by comparing timestamps, so a device with a skewed clock would win
 /// arguments it should lose. One clock, in the endpoint.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncedFeed {
     pub feedUrl: String,
     pub title: String,
@@ -34,7 +35,8 @@ pub struct SyncedFeed {
 
 /// A pairing ticket. Single-use and short-lived: a pair code is only ever
 /// exchangeable for a device token, never usable as one itself.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PairCode {
     /// Epoch ms at which the code expires.
     pub expiresAt: u64,

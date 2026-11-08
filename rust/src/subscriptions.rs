@@ -110,7 +110,7 @@ pub fn describe_import(additions: &FeedAdditions) -> String {
 }
 
 /// The result of planning feed additions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FeedAdditions {
     /// New subscriptions, in the order given, each carrying its normalized URL.
     pub added: Vec<Feed>,
