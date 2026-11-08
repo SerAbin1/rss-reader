@@ -12,6 +12,8 @@
 mod models;
 mod timestamps;
 
+#[cfg(target_os = "android")]
+mod jni_shim;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
