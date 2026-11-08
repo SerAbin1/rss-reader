@@ -1,10 +1,12 @@
 package io.github.serabin1.rssreader.core
 
-// The decisions in app.ts's reconcileFeeds, split out from the network and
-// database calls so they can be tested alone. Two steps around one request:
-// work out what to tell the group, then — given the group's answer — work out
-// what to keep locally. The server owns the timestamps, so it alone decides
-// last-write-wins; this device only reports what the group doesn't know.
+import kotlinx.serialization.encodeToString
+
+// The decisions in app.ts's reconcileFeeds, backed by the shared Rust crate.
+// Two steps around one request: work out what to tell the group, then — given
+// the group's answer — work out what to keep locally. The server owns the
+// timestamps, so it alone decides last-write-wins; this device only reports
+// what the group doesn't know.
 
 data class RemoteFeed(
     val feedUrl: String,
@@ -30,18 +32,23 @@ data class ReconcileResult(
 )
 
 object Reconcile {
+    // `personal` — every live personal subscription on this device.
+    // `curatedUrls` — the normalised URLs of the curated feeds.
+    // `remote` — the feeds the group knows about, live or tombstoned.
     fun planPush(
         personal: List<Feed>,
         curatedUrls: Set<String>,
         remote: List<RemoteFeed>,
     ): ReconcilePush {
-        val remoteUrls = remote.map { it.feedUrl }.toSet()
+        val json = RssReaderCore.planPushJson(
+            Wire.json.encodeToString(personal.map { Wire.Feed(it.feedUrl, it.title, it.siteUrl) }),
+            Wire.json.encodeToString(curatedUrls.toList()),
+            Wire.json.encodeToString(remote.map { Wire.RemoteFeed(it.feedUrl, it.title, it.deleted) }),
+        )
+        val wire = Wire.json.decodeFromString<Wire.ReconcilePush>(json)
         return ReconcilePush(
-            additions =
-                personal
-                    .filter { it.feedUrl !in remoteUrls && it.feedUrl !in curatedUrls }
-                    .map { Feed(it.feedUrl, it.title) },
-            retractions = remote.filter { !it.deleted && it.feedUrl in curatedUrls }.map { it.feedUrl },
+            additions = wire.additions.map { Feed(it.feedUrl, it.title, it.siteUrl) },
+            retractions = wire.retractions,
         )
     }
 
@@ -50,9 +57,15 @@ object Reconcile {
     fun applyGroup(
         group: List<RemoteFeed>,
         curatedUrls: Set<String>,
-    ): ReconcileResult =
-        ReconcileResult(
-            live = group.filter { !it.deleted && it.feedUrl !in curatedUrls }.map { Feed(it.feedUrl, it.title) },
-            removed = group.filter { it.deleted && it.feedUrl !in curatedUrls }.map { it.feedUrl },
+    ): ReconcileResult {
+        val json = RssReaderCore.applyGroupJson(
+            Wire.json.encodeToString(group.map { Wire.RemoteFeed(it.feedUrl, it.title, it.deleted) }),
+            Wire.json.encodeToString(curatedUrls.toList()),
         )
+        val wire = Wire.json.decodeFromString<Wire.ReconcileResult>(json)
+        return ReconcileResult(
+            live = wire.live.map { Feed(it.feedUrl, it.title, it.siteUrl) },
+            removed = wire.removed,
+        )
+    }
 }

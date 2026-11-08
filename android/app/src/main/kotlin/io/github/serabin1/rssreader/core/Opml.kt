@@ -1,7 +1,12 @@
 package io.github.serabin1.rssreader.core
 
-import io.github.serabin1.rssreader.core.Xml.attr
-import org.w3c.dom.Element
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+// Port of the web app's OPML parse/write — backed by the shared Rust crate via
+// JNI, so imports/exports behave identically on every platform.
 
 class OpmlParseException(
     message: String,
@@ -9,51 +14,29 @@ class OpmlParseException(
 ) : Exception(message, cause)
 
 object Opml {
-    // Port of src/lib/opml.ts: matches outlines at any nesting depth, so
-    // folders/categories are flattened.
+    // Flattens outlines at any nesting depth. A malformed document throws.
     fun parse(text: String): List<Feed> {
-        val doc =
-            try {
-                Xml.parse(text)
-            } catch (e: Exception) {
-                throw OpmlParseException("Invalid OPML file", e)
-            }
-        val outlines = doc.getElementsByTagName("outline")
-        return (0 until outlines.length).mapNotNull { i ->
-            val outline = outlines.item(i) as Element
-            val feedUrl = outline.attr("xmlUrl")?.ifEmpty { null } ?: return@mapNotNull null
-            val title = outline.attr("title") ?: outline.attr("text") ?: feedUrl
-            Feed(feedUrl, title)
+        val json = RssReaderCore.parseOpmlJson(text)
+        val element = runCatching { Wire.json.parseToJsonElement(json) }.getOrElse {
+            throw OpmlParseException("Invalid OPML file", it)
         }
+        // The crate reports errors as a {"error": "..."} envelope.
+        (element as? kotlinx.serialization.json.JsonObject)?.get("error")?.let {
+            throw OpmlParseException(it.jsonPrimitive.content)
+        }
+        return element.jsonArray
+            .map { item -> Wire.json.decodeFromString<Wire.Feed>(item.toString()) }
+            .map { Feed(it.feedUrl, it.title, it.siteUrl) }
     }
 
     // htmlUrl is written only when the feed's own homepage is known, and never
-    // as a copy of xmlUrl — the exporter habit FeedParser's comment complains
-    // about.
+    // as a copy of xmlUrl — the exporter habit that links readers at raw XML.
     fun write(
         feeds: List<Feed>,
         title: String,
     ): String =
-        buildString {
-            append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-            append("<opml version=\"2.0\">\n")
-            append("  <head>\n    <title>").append(escape(title)).append("</title>\n  </head>\n")
-            append("  <body>\n")
-            for (feed in feeds) {
-                append("    <outline type=\"rss\"")
-                append(" text=\"").append(escape(feed.title)).append('"')
-                append(" title=\"").append(escape(feed.title)).append('"')
-                append(" xmlUrl=\"").append(escape(feed.feedUrl)).append('"')
-                feed.siteUrl?.let { append(" htmlUrl=\"").append(escape(it)).append('"') }
-                append(" />\n")
-            }
-            append("  </body>\n</opml>\n")
-        }
-
-    private fun escape(value: String): String =
-        value
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
+        RssReaderCore.writeOpml(
+            Wire.json.encodeToString(feeds.map { Wire.Feed(it.feedUrl, it.title, it.siteUrl) }),
+            title,
+        )
 }

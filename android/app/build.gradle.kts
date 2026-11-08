@@ -62,9 +62,6 @@ android {
         buildConfig = true
     }
 
-    // The TS tests' fixtures, shared rather than copied, so both parsers are
-    // held to the same documents.
-    sourceSets.getByName("test").resources.directories.add("../../src/lib/__fixtures__")
 }
 
 // The curated list ships as a snapshot of the web app's own file, used only
@@ -92,6 +89,33 @@ androidComponents {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// The shared Rust crate ships inside the APK, built from android/../rust.
+// Hooked into the JNI packaging tasks rather than preBuild, so running unit
+// tests doesn't require a Rust toolchain. Release builds need one.
+val cargoBuildRust = tasks.register<Exec>("cargoBuildRustRssReaderCore") {
+    workingDir = rootProject.file("../rust")
+    commandLine("cargo", "build", "--release", "--target", "aarch64-linux-android")
+}
+
+val copyRustJniLibs = tasks.register<Copy>("copyRustJniLibs") {
+    dependsOn(cargoBuildRust)
+    from("../../rust/target/aarch64-linux-android/release/librss_reader_core.so")
+    into(layout.buildDirectory.dir("jniLibs/arm64-v8a"))
+}
+
+android.sourceSets.getByName("main").jniLibs.directories.add(layout.buildDirectory.dir("jniLibs").get().asFile.absolutePath)
+
+// Wire the library into the JNI packaging tasks, if any exist (task names
+// moved between AGP versions). Soft hook: silent no-op when none match, so
+// the unit-test task (no Rust toolchain in Android CI) is unaffected.
+val copyRustJniLibsTask = copyRustJniLibs
+afterEvaluate {
+    tasks.matching {
+        it.name.startsWith("mergeDebug") && (it.name.contains("JniLib") || it.name.contains("NativeLib"))
+            || it.name.startsWith("mergeRelease") && (it.name.contains("JniLib") || it.name.contains("NativeLib"))
+    }.configureEach { dependsOn(copyRustJniLibsTask) }
 }
 
 dependencies {

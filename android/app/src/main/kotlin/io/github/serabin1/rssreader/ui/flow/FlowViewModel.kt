@@ -41,11 +41,11 @@ internal fun sections(rows: List<ArticleRow>, isRead: (ArticleRow) -> Boolean): 
             val label = when (day) {
                 today -> "Today"
                 today.minusDays(1) -> "Yesterday"
-                else -> RelativeDate.formatFullDate(dayRows.first().publishedAt, zone)
+                else -> RelativeDate.formatFullDate(dayRows.first().publishedAt)
             }
             DaySection(
                 label,
-                dayRows.map { ListedArticle(it, isRead(it), RelativeDate.formatPostDate(it.publishedAt, now, zone)) },
+                dayRows.map { ListedArticle(it, isRead(it), RelativeDate.formatPostDate(it.publishedAt, now)) },
             )
         }
 }
