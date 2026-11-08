@@ -91,31 +91,29 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
-// The shared Rust crate ships inside the APK, built from android/../rust.
-// Hooked into the JNI packaging tasks rather than preBuild, so running unit
-// tests doesn't require a Rust toolchain. Release builds need one.
+// The shared Rust crate ships inside the APK. cargo-ndk finds the NDK itself
+// (ANDROID_NDK_HOME, ANDROID_HOME, or the conventional per-OS SDK location),
+// so no hand-written linker config is needed anywhere. Outputs the standard
+// app/src/main/jniLibs/<abi>/ layout, which AGP packages automatically.
+// Not wired into preBuild on purpose: unit tests don't need the .so and
+// shouldn't require a Rust toolchain.
 val cargoBuildRust = tasks.register<Exec>("cargoBuildRustRssReaderCore") {
     workingDir = rootProject.file("../rust")
-    commandLine("cargo", "build", "--release", "--target", "aarch64-linux-android")
+    commandLine(
+        "cargo", "ndk",
+        "-t", "aarch64-linux-android",
+        "-o", file("src/main/jniLibs").absolutePath,
+        "build", "--release",
+    )
 }
-
-val copyRustJniLibs = tasks.register<Copy>("copyRustJniLibs") {
-    dependsOn(cargoBuildRust)
-    from("../../rust/target/aarch64-linux-android/release/librss_reader_core.so")
-    into(layout.buildDirectory.dir("jniLibs/arm64-v8a"))
-}
-
-android.sourceSets.getByName("main").jniLibs.directories.add(layout.buildDirectory.dir("jniLibs").get().asFile.absolutePath)
-
-// Wire the library into the JNI packaging tasks, if any exist (task names
-// moved between AGP versions). Soft hook: silent no-op when none match, so
-// the unit-test task (no Rust toolchain in Android CI) is unaffected.
-val copyRustJniLibsTask = copyRustJniLibs
+// APK packaging needs the .so; unit tests don't. Wire the packaging tasks
+// (soft hook — exact names vary across AGP versions), never preBuild.
+val cargoBuildRustTask = cargoBuildRust
 afterEvaluate {
     tasks.matching {
-        it.name.startsWith("mergeDebug") && (it.name.contains("JniLib") || it.name.contains("NativeLib"))
-            || it.name.startsWith("mergeRelease") && (it.name.contains("JniLib") || it.name.contains("NativeLib"))
-    }.configureEach { dependsOn(copyRustJniLibsTask) }
+        (it.name.startsWith("mergeDebug") && (it.name.contains("JniLibFolders") || it.name.contains("NativeLibs")))
+            || (it.name.startsWith("mergeRelease") && (it.name.contains("JniLibFolders") || it.name.contains("NativeLibs")))
+    }.configureEach { dependsOn(cargoBuildRustTask) }
 }
 
 dependencies {

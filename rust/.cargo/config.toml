@@ -1,9 +1,0 @@
-# Project-local cargo config for Android builds.
-# Points the Android target linkers at the NDK's LLVM toolchains, matching
-# minSdk 26 from the app's build.gradle.kts. Without this, a plain cargo
-# build falls back to the host ld, which drops aarch64-ELF relocations.
-[target.aarch64-linux-android]
-linker = "/home/sonu007/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
-
-[target.x86_64-linux-android]
-linker = "/home/sonu007/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android26-clang"
