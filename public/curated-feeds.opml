@@ -67,5 +67,8 @@
     <outline type="rss" text="Corrode Rust Consulting" title="Corrode Rust Consulting" xmlUrl="https://corrode.dev/atom.xml" htmlUrl="https://corrode.dev" />
     <outline type="rss" text="Justin Meiners Site" title="Justin Meiners Site" xmlUrl="https://www.jmeiners.com/feed.xml" htmlUrl="https://www.jmeiners.com" />
     <outline type="rss" text="knlb.dev" title="knlb.dev" xmlUrl="https://knlb.dev/essays/feed.xml" htmlUrl="https://knlb.dev/" />
+    <outline type="rss" text="Metadata" title="Metadata" xmlUrl="https://muratbuffalo.blogspot.com/feeds/posts/default" htmlUrl="https://muratbuffalo.blogspot.com/" />
+    <outline type="rss" text="The Programmer's Paradox" title="The Programmer's Paradox" xmlUrl="https://feeds.feedburner.com/TheProgrammersParadox" htmlUrl="http://theprogrammersparadox.blogspot.com/" />
+    <outline type="rss" text="Jon Gjengset" title="Jon Gjengset" xmlUrl="https://thesquareplanet.com/feed.xml" htmlUrl="https://thesquareplanet.com/" />
   </body>
 </opml>
