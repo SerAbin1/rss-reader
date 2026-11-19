@@ -52,15 +52,28 @@ jobs:
           mkdir "$work/repo"
           # The latest three, so a bad release can still be rolled back from
           # the F-Droid client.
-          gh release list --limit 3 --json tagName --jq '.[].tagName' |
-            while read -r tag; do
-              gh release download "$tag" --pattern '*.apk' --dir "$work/repo"
+          gh release list --limit 3 --exclude-drafts --json tagName,publishedAt \
+            --jq '.[] | "\(.tagName)\t\(.publishedAt)"' |
+            while IFS=$'\t' read -r tag published; do
+              stage="$work/staging"
+              rm -rf "$stage"
+              mkdir "$stage"
+              gh release download "$tag" --pattern '*.apk' --dir "$stage"
+              # Stamp each APK with its release's publication date;
+              # --use-date-from-apk below reads that as the version's "added"
+              # date, so a repo rebuild keeps the original dates instead of
+              # marking every version as new.
+              for apk in "$stage"/*.apk; do
+                [ -e "$apk" ] || continue
+                touch -d "$published" "$apk"
+                mv "$apk" "$work/repo/"
+              done
             done
           echo "FDROID_WORK=$work" >> "$GITHUB_ENV"
 
       - name: Build the index
         working-directory: ${{ env.FDROID_WORK }}
-        run: fdroid update --pretty
+        run: fdroid update --use-date-from-apk --pretty
 
       - name: Print the repo link
         working-directory: ${{ env.FDROID_WORK }}
