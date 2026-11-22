@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 // Asking before "mark read up to here" skips more than the one post, since a
 // marked post can't be brought back — the watermark is forward-only.
@@ -31,17 +33,21 @@ data class ListedArticle(val row: ArticleRow, val read: Boolean, val dateLabel: 
 
 data class DaySection(val label: String, val articles: List<ListedArticle>)
 
+// Matches RssReaderCore.formatFullDate output: "MMM d, yyyy" (e.g. "Apr 9, 2019")
+private const val DAY_LABEL_FORMAT = "MMM d, yyyy"
+
 internal fun sections(rows: List<ArticleRow>, isRead: (ArticleRow) -> Boolean): List<DaySection> {
     val now = System.currentTimeMillis()
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
+    val dayFormatter = DateTimeFormatter.ofPattern(DAY_LABEL_FORMAT, Locale.ENGLISH)
     return rows
         .groupBy { Instant.ofEpochMilli(it.publishedAt).atZone(zone).toLocalDate() }
         .map { (day, dayRows) ->
             val label = when (day) {
                 today -> "Today"
                 today.minusDays(1) -> "Yesterday"
-                else -> RelativeDate.formatFullDate(dayRows.first().publishedAt)
+                else -> day.format(dayFormatter)
             }
             DaySection(
                 label,
