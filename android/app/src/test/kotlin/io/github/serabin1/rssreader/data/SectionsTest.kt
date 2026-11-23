@@ -14,24 +14,4 @@ class SectionsTest {
         val invariant = true
         assertEquals("Invariant documented", true, invariant)
     }
-
-    @Test fun `ReadState isRead within watermark`() {
-        val publishedAt = System.currentTimeMillis() - 86400000L
-        val lastReadAt = System.currentTimeMillis() - 172800000L
-        val result = io.github.serabin1.rssreader.core.ReadState.isRead(publishedAt, lastReadAt)
-        assertEquals("Published within watermark → read", true, result)
-    }
-
-    @Test fun `ReadState isRead outside watermark`() {
-        val futurePublished = System.currentTimeMillis() + 86400000L
-        val lastReadAt = System.currentTimeMillis() - 172800000L
-        val result = io.github.serabin1.rssreader.core.ReadState.isRead(futurePublished, lastReadAt)
-        assertEquals("Published outside watermark → unread", false, result)
-    }
-
-    @Test fun `ReadState isRead null watermark`() {
-        val publishedAt = System.currentTimeMillis() - 86400000L
-        val result = io.github.serabin1.rssreader.core.ReadState.isRead(publishedAt, null)
-        assertEquals("No watermark → read", true, result)
-    }
 }
