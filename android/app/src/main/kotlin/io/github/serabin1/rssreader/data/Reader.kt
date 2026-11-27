@@ -33,6 +33,12 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class RefreshProgress(val settled: Int, val total: Int)
 
+// "Disable all" wins over everything; otherwise "All notifications" overrides
+// each feed's switch, whose value is left untouched so it takes over again as
+// soon as the global switch is off.
+fun shouldNotify(settings: RefreshSettings, feedNotify: Boolean): Boolean =
+    !settings.disableAllNotifications && (settings.notifyAll || feedNotify)
+
 // What the app does, minus how it looks: the Android counterpart of the web
 // app's src/scripts/app.ts. Local state is authoritative and saved first;
 // sync is best-effort on top, with the same rules — server-owned feed
@@ -133,8 +139,8 @@ class Reader(
 
     /**
      * Fetches every feed and syncs. A refresh already running is not doubled up.
-     * Returns the posts it stored for the first time from feeds with
-     * notifications on — empty if it didn't run.
+     * Returns the posts it stored for the first time that should notify —
+     * empty if it didn't run.
      */
     suspend fun refresh(): List<ArticleEntity> {
         if (!refreshMutex.tryLock()) return emptyList()
@@ -148,6 +154,7 @@ class Reader(
 
     private suspend fun doRefresh(): List<ArticleEntity> = coroutineScope {
         val token = prefs.deviceToken()
+        val settings = prefs.refreshSettings()
         feedsReconciled = false
         degradedPrompted = false
         readWhileDegraded = false
@@ -167,13 +174,13 @@ class Reader(
         }
         val reconciling = token?.let { async { syncing { reconcileFeeds(it) } } }
 
-        val arrived = fetchAll(feeds.all(), watermark).toMutableList()
+        val arrived = fetchAll(feeds.all(), watermark, settings).toMutableList()
 
         // Feeds the reconcile turned up get a second pass, like the web's
         // loadInto(arrived).
         reconciling?.await()?.onSuccess { added ->
             feedsReconciled = true
-            arrived += fetchAll(added, watermark)
+            arrived += fetchAll(added, watermark, settings)
         }
 
         if (token != null) maybePushWatermark(token)
@@ -243,8 +250,13 @@ class Reader(
     }
 
     // Fetches every feed and stores its unread posts; returns only the newly
-    // stored ones from feeds with notifications on.
-    private suspend fun fetchAll(list: List<FeedEntity>, watermark: Deferred<Long?>): List<ArticleEntity> = coroutineScope {
+    // stored ones that should notify, per the Settings switches and each
+    // feed's own switch.
+    private suspend fun fetchAll(
+        list: List<FeedEntity>,
+        watermark: Deferred<Long?>,
+        settings: RefreshSettings,
+    ): List<ArticleEntity> = coroutineScope {
         if (list.isEmpty()) return@coroutineScope emptyList()
         val permits = Semaphore(FETCH_CONCURRENCY)
         _progress.update { RefreshProgress(settled = it?.settled ?: 0, total = (it?.total ?: 0) + list.size) }
@@ -252,7 +264,7 @@ class Reader(
             async {
                 val stored = permits.withPermit { fetchOne(feed, watermark) }
                 _progress.update { it?.copy(settled = it.settled + 1) }
-                if (feed.notify) stored else emptyList()
+                if (shouldNotify(settings, feed.notify)) stored else emptyList()
             }
         }.awaitAll().flatten()
     }
@@ -432,7 +444,7 @@ class Reader(
         val rows = additions.added.map { FeedEntity(it.feedUrl, it.title, siteUrl = null, curated = false, lastError = null) }
         feeds.insertNew(rows)
         scope.launch {
-            fetchAll(rows, CompletableDeferred(prefs.lastReadAt()))
+            fetchAll(rows, CompletableDeferred(prefs.lastReadAt()), prefs.refreshSettings())
             _progress.value = null
             reconcileAfterAdd()
         }

@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,7 +64,9 @@ import io.github.serabin1.rssreader.data.RefreshSettings
 import io.github.serabin1.rssreader.data.StartScreen
 import io.github.serabin1.rssreader.ui.common.openInBrowser
 import io.github.serabin1.rssreader.ui.common.readerViewModel
+import io.github.serabin1.rssreader.ui.common.rememberNotificationPermissionRequest
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +83,16 @@ fun SettingsScreen(onBack: () -> Unit) {
     var choosingStart by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val askNotificationPermission = rememberNotificationPermissionRequest {
+        scope.launch { snackbar.showSnackbar("Notifications are blocked. Allow them for Reader in system settings.") }
+    }
+    val onNotificationsEnabled = {
+        if (!refresh.background) {
+            scope.launch { snackbar.showSnackbar("Notifications come with background refresh, which is off in Settings.") }
+        }
+        askNotificationPermission()
+    }
     var joining by rememberSaveable { mutableStateOf(false) }
     var confirmUnpair by remember { mutableStateOf(false) }
 
@@ -146,6 +159,26 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 OutlinedButton(onClick = { exportLauncher.launch("subscriptions.opml") }) { Text("Export OPML") }
             }
+
+            Section("Notifications")
+            SettingSwitch(
+                title = "All notifications",
+                body = "Notify for new posts from every feed. When this is off, each feed's own Notifications switch applies.",
+                checked = refresh.notifyAll,
+                onChange = { on ->
+                    vm.updateRefresh { it.copy(notifyAll = on) }
+                    if (on) onNotificationsEnabled()
+                },
+            )
+            SettingSwitch(
+                title = "Disable all notifications",
+                body = "No notifications from any feed, whatever the switches above and per-feed switches say. Feed switches are kept as they are.",
+                checked = refresh.disableAllNotifications,
+                onChange = { on ->
+                    vm.updateRefresh { it.copy(disableAllNotifications = on) }
+                    if (!on) onNotificationsEnabled()
+                },
+            )
 
             Section("Refreshing")
             Column {

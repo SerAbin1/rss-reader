@@ -1,8 +1,5 @@
 package io.github.serabin1.rssreader.ui.feeds
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -78,7 +75,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.serabin1.rssreader.core.RelativeDate
 import io.github.serabin1.rssreader.data.FeedEntity
@@ -86,6 +82,7 @@ import io.github.serabin1.rssreader.ui.common.FeedAvatar
 import io.github.serabin1.rssreader.ui.common.RefreshableBox
 import io.github.serabin1.rssreader.ui.common.openInBrowser
 import io.github.serabin1.rssreader.ui.common.readerViewModel
+import io.github.serabin1.rssreader.ui.common.rememberNotificationPermissionRequest
 import kotlinx.coroutines.launch
 
 // Swiping across home is a shortcut to the two banners: left to right opens
@@ -134,23 +131,17 @@ fun FeedsScreen(
     }
 
     val scope = rememberCoroutineScope()
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) scope.launch { snackbar.showSnackbar("Notifications are blocked. Allow them for Reader in system settings.") }
+    val askNotificationPermission = rememberNotificationPermissionRequest {
+        scope.launch { snackbar.showSnackbar("Notifications are blocked. Allow them for Reader in system settings.") }
     }
-    // The permission is asked for when a feed's notifications go on rather
-    // than at launch, so the request comes with an obvious reason. They're
-    // posted by background refresh, so with that off none would come.
+    // They're posted by background refresh, so with that off none would come.
     val setNotify = { feedUrl: String, notify: Boolean ->
         vm.setNotify(feedUrl, notify)
         if (notify) {
             if (!state.settings.background) {
                 scope.launch { snackbar.showSnackbar("Notifications come with background refresh, which is off in Settings.") }
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+            askNotificationPermission()
         }
     }
 

@@ -15,10 +15,11 @@ import kotlinx.coroutines.flow.map
 // Which page the app opens on, like Read You's "initial page".
 enum class StartScreen(val label: String) { Home("Home"), Unread("Unread"), Favourites("Favourites") }
 
-// When the app goes to the network on its own. Every one of these is a
-// separate switch because they cost different things: background refresh is
-// battery and data while you aren't looking, refresh-on-open is a wait every
-// launch, and pull-to-refresh is easy to trigger by accident.
+// When the app goes to the network on its own, and which posts notify.
+// Every one of these is a separate switch because they cost different things:
+// background refresh is battery and data while you aren't looking,
+// refresh-on-open is a wait every launch, and pull-to-refresh is easy to
+// trigger by accident.
 data class RefreshSettings(
     val background: Boolean = true,
     val backgroundIntervalMinutes: Int = 60,
@@ -26,6 +27,11 @@ data class RefreshSettings(
     val onOpen: Boolean = true,
     val pullToRefresh: Boolean = true,
     val refreshButton: Boolean = true,
+    // Notify for every feed. The per-feed switch takes over again when off.
+    val notifyAll: Boolean = false,
+    // Master off: no notification from any feed, whatever the switches above.
+    // Per-feed values are left alone, so they resume when this goes off.
+    val disableAllNotifications: Boolean = false,
 ) {
     companion object {
         // WorkManager won't run periodic work more often than every 15 minutes.
@@ -50,6 +56,8 @@ private val BACKGROUND_UNMETERED = booleanPreferencesKey("backgroundUnmeteredOnl
 private val ON_OPEN = booleanPreferencesKey("refreshOnOpen")
 private val PULL_TO_REFRESH = booleanPreferencesKey("pullToRefresh")
 private val REFRESH_BUTTON = booleanPreferencesKey("refreshButton")
+private val NOTIFY_ALL = booleanPreferencesKey("notifyAll")
+private val DISABLE_ALL_NOTIFICATIONS = booleanPreferencesKey("disableAllNotifications")
 private val START_SCREEN = stringPreferencesKey("startScreen")
 
 class Prefs(context: Context) {
@@ -100,6 +108,8 @@ class Prefs(context: Context) {
             onOpen = prefs[ON_OPEN] ?: defaults.onOpen,
             pullToRefresh = prefs[PULL_TO_REFRESH] ?: defaults.pullToRefresh,
             refreshButton = prefs[REFRESH_BUTTON] ?: defaults.refreshButton,
+            notifyAll = prefs[NOTIFY_ALL] ?: defaults.notifyAll,
+            disableAllNotifications = prefs[DISABLE_ALL_NOTIFICATIONS] ?: defaults.disableAllNotifications,
         )
     }
 
@@ -113,6 +123,8 @@ class Prefs(context: Context) {
             it[ON_OPEN] = value.onOpen
             it[PULL_TO_REFRESH] = value.pullToRefresh
             it[REFRESH_BUTTON] = value.refreshButton
+            it[NOTIFY_ALL] = value.notifyAll
+            it[DISABLE_ALL_NOTIFICATIONS] = value.disableAllNotifications
         }
     }
 
